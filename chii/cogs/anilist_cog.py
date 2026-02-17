@@ -335,7 +335,7 @@ class AniListCog(discord.ext.commands.Cog):
         SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
 
         await interaction.followup.send(
-            f"Linked {member.mention} to https://anilist.co/user/{username}",
+            f"Linked {member.mention} to [{username}](<https://anilist.co/user/{username}>)",
             ephemeral=True,
         )
 

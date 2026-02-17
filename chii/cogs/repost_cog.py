@@ -60,8 +60,8 @@ class RepostCog(discord.ext.commands.Cog):
             "url": match.group(1),
         })
 
-    @group.command(name="add", description="Add a channel to the watching list.")
-    @discord.app_commands.describe(channel="The channel to watch for reposts.")
+    @group.command(name="add", description="Start monitoring a channel for reposting videos.")
+    @discord.app_commands.describe(channel="Channel the bot should watch for videos.")
     @discord.ext.commands.is_owner()
     async def repost_add(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         data = self._load_data()
@@ -75,8 +75,8 @@ class RepostCog(discord.ext.commands.Cog):
 
         await interaction.response.send_message(f"Added {channel.mention} as repost channel.", ephemeral=True)
 
-    @group.command(name="remove", description="Remove a channel from the watching list.")
-    @discord.app_commands.describe(channel="The channel to stop watching.")
+    @group.command(name="remove", description="Stop monitoring a channel for reposts.")
+    @discord.app_commands.describe(channel="Channel to remove from monitoring.")
     @discord.ext.commands.is_owner()
     async def repost_remove(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         data = self._load_data()
@@ -90,7 +90,7 @@ class RepostCog(discord.ext.commands.Cog):
 
         await interaction.response.send_message(f"Removed {channel.mention} from the watching list.", ephemeral=True)
 
-    @group.command(name="list", description="List the channels that are currently being watched.")
+    @group.command(name="list", description="Show all channels that are currently being monitored for videos.")
     @discord.ext.commands.is_owner()
     async def repost_list(self, interaction: discord.Interaction) -> None:
         data = self._load_data()
