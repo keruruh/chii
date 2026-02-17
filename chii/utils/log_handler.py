@@ -1,8 +1,8 @@
 import logging
-
 from logging.handlers import RotatingFileHandler
 
 from chii.config import Config
+
 
 class LogHandler:
     l = logging.getLogger(f"chii.utils.{__qualname__}")

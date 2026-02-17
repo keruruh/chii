@@ -1,0 +1,51 @@
+indent-width = 4
+line-length = 120
+
+preview = true
+
+[format]
+
+indent-style = "space"
+quote-style = "double"
+
+docstring-code-format = true
+skip-magic-trailing-comma = false
+
+preview = true
+
+[lint]
+
+select = [
+    "ALL",
+]
+
+ignore = [
+    "ANN401",
+
+    "BLE001",
+
+    "COM812",
+    "CPY001",
+
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D107",
+    "D203",
+    "D213",
+
+    "E741",
+    "EM101",
+
+    "F403",
+
+    "PLR6301",
+    "PLW1510",
+
+    "S404",
+    "S603",
+
+    "TRY003",
+]

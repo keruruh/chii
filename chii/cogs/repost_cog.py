@@ -1,12 +1,14 @@
 import json
-import re
 import logging
+import pathlib
+import re
 
 import discord
 import discord.ext.commands
 
 from chii.config import Config
 from chii.utils import JSON, SimpleUtils
+
 
 class RepostCog(discord.ext.commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
@@ -27,7 +29,7 @@ class RepostCog(discord.ext.commands.Cog):
             SimpleUtils.save_data(Config.REPOSTS_DATA_PATH, default_data)
             return default_data.copy()
 
-        with open(Config.REPOSTS_DATA_PATH, "r", encoding="utf-8") as f:
+        with pathlib.Path(Config.REPOSTS_DATA_PATH).open(encoding="utf-8") as f:
             data = json.load(f)
 
         if "channel_ids" not in data:
@@ -53,7 +55,7 @@ class RepostCog(discord.ext.commands.Cog):
 
         self.l.info(f"Detected repost URL in channel {message.channel.id} by user {message.author.id}.")
 
-        await self.bot.video_worker.enqueue({ # type: ignore
+        await self.bot.video_worker.enqueue({
             "message": message,
             "url": match.group(1),
         })
@@ -104,12 +106,10 @@ class RepostCog(discord.ext.commands.Cog):
             channel = interaction.guild.get_channel(c_id) if interaction.guild else None
             output.append(channel.mention if channel else f"`{c_id}`")
 
-        message = (
-            "Channels that are **currently** being watched:\n"
-            + "\n".join(f"- {channel}" for channel in output)
-        )
+        message = "Channels that are **currently** being watched:\n" + "\n".join(f"- {channel}" for channel in output)
 
         await interaction.response.send_message(message, ephemeral=True)
+
 
 async def setup(bot: discord.ext.commands.Bot) -> None:
     await bot.add_cog(RepostCog(bot))
