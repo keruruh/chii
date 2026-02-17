@@ -8,7 +8,7 @@ import discord
 import discord.ext.commands
 
 from chii.config import Config
-from chii.utils import SimpleUtils
+from chii.utils import JSON, SimpleUtils
 
 class ReminderCog(discord.ext.commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
@@ -45,7 +45,7 @@ class ReminderCog(discord.ext.commands.Cog):
         except Exception:
             self.l.exception("Failed loading reminders.")
 
-    def _schedule_reminder(self, reminder: SimpleUtils.JSON) -> None:
+    def _schedule_reminder(self, reminder: JSON) -> None:
         reminder_id = reminder["id"]
 
         if reminder_id in self.tasks:

@@ -7,7 +7,7 @@ import discord.ext.commands
 import discord.ext.tasks
 
 from chii.config import Config
-from chii.utils import SimpleUtils
+from chii.utils import JSON, SimpleUtils
 
 class AniListCog(discord.ext.commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
@@ -29,7 +29,7 @@ class AniListCog(discord.ext.commands.Cog):
 
         await self.session.close()
 
-    def _load_data(self) -> SimpleUtils.JSON:
+    def _load_data(self) -> JSON:
         default_data = {
             "channel_id": None,
             "users": {}
@@ -42,7 +42,7 @@ class AniListCog(discord.ext.commands.Cog):
         with open(Config.ANILIST_DATA_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    async def _query_graphql(self, query: str, variables: SimpleUtils.JSON | None = None) -> SimpleUtils.JSON | None:
+    async def _query_graphql(self, query: str, variables: JSON | None = None) -> JSON | None:
         api_url = "https://graphql.anilist.co"
         payload = {
             "query": query,
@@ -107,7 +107,7 @@ class AniListCog(discord.ext.commands.Cog):
 
         return bool(anime_lists or manga_lists)
 
-    async def _fetch_batch_activity(self, usernames: SimpleUtils.JSON) -> SimpleUtils.JSON | None:
+    async def _fetch_batch_activity(self, usernames: JSON) -> JSON | None:
         user_parts = []
 
         for alias, name in usernames.items():
@@ -182,7 +182,7 @@ class AniListCog(discord.ext.commands.Cog):
             self.l.info(f"Unexpected error while parsing progress \"{progress_string}\".")
             return
 
-    def _is_real_progress(self, user_data: SimpleUtils.JSON, activity: SimpleUtils.JSON) -> bool:
+    def _is_real_progress(self, user_data: JSON, activity: JSON) -> bool:
         media_id = str(activity["media"]["id"])
         progress = str(activity.get("progress", "")).strip()
 
@@ -210,7 +210,7 @@ class AniListCog(discord.ext.commands.Cog):
 
         return False
 
-    def _update_streak(self, user_data: SimpleUtils.JSON, timestamp: int) -> None:
+    def _update_streak(self, user_data: JSON, timestamp: int) -> None:
         last = user_data.get("last_activity_at", 0)
 
         if last == 0:

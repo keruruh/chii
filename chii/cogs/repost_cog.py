@@ -6,7 +6,7 @@ import discord
 import discord.ext.commands
 
 from chii.config import Config
-from chii.utils import SimpleUtils
+from chii.utils import JSON, SimpleUtils
 
 class RepostCog(discord.ext.commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
@@ -18,7 +18,7 @@ class RepostCog(discord.ext.commands.Cog):
 
         self.l.info("RepostCog initialized.")
 
-    def _load_data(self) -> SimpleUtils.JSON:
+    def _load_data(self) -> JSON:
         default_data = {
             "channel_ids": [],
         }
