@@ -1,0 +1,28 @@
+[Unit]
+
+Description=Chii Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+
+Type=simple
+
+User=<your_username>
+WorkingDirectory=<bot_folder>
+ExecStart=<bot_folder>/.venv/bin/python3 -u run.py
+
+Restart=always
+RestartSec=5
+
+TimeoutStopSec=20
+KillSignal=SIGINT
+
+Environment=PYTHONUNBUFFERED=1
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+
+WantedBy=multi-user.target
