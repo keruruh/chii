@@ -34,11 +34,14 @@ async def on_ready() -> None:
 
 async def load_cogs() -> None:
     for file in pathlib.Path("chii/cogs").rglob("*.py"):  # noqa: ASYNC240 - Startup-only filesystem scan.
+        if file.name == "__init__.py":
+            continue
+
         await bot.load_extension(f"chii.cogs.{file.stem}")
         l.info(f"Loaded cog: {file.name}.")
 
 
-async def main() -> None:
+async def start() -> None:
     l.info("Starting bot main loop...")
 
     async with bot:

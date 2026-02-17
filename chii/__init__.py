@@ -1,1 +1,1 @@
-from chii.main import main as main
+from chii.main import start as start
