@@ -144,7 +144,7 @@ class AniListCog(commands.Cog):
 
         if old_progress is None:
             self.l.info(f"Initial cache set for media {media_id}.")
-            return False
+            return True
 
         if new_progress > old_progress:
             self.l.info(f"Progress of media {media_id} increased from {old_progress} to {new_progress}.")
@@ -154,9 +154,9 @@ class AniListCog(commands.Cog):
         return False
 
     def _update_streak(self, user_data: JSON, timestamp: int) -> None:
-        last = user_data.get("last_activity_at", 0)
+        last = user_data.get("last_activity_at", None)
 
-        if last == 0:
+        if not last:
             user_data["streak"] = 1
             self.l.info("Streak started for user.")
         else:
@@ -271,44 +271,44 @@ class AniListCog(commands.Cog):
             discord_id = alias_to_discord[alias]
             user_data = data["users"][discord_id]
             activity_id = activity["id"]
-            last_seen = user_data.get("last_activity_id", 0)
+            last_seen = user_data.get("last_activity_id", None)
 
             if not user_data.get("synced"):
-                self.l.info(f"Syncing user data for Discord ID {discord_id}.")
+                self.l.info(f"Syncing user data for member {discord_id}.")
                 user_data["last_activity_id"] = activity_id
                 user_data["synced"] = True
 
+            if last_seen and activity_id <= last_seen:
+                self.l.debug(f"No new activity for member {discord_id}. Last seen: {last_seen}.")
                 continue
 
-            if activity_id <= last_seen:
-                self.l.debug(f"No new activity for Discord ID {discord_id}. Last seen: {last_seen}.")
-                continue
+            self.l.info(user_data)
+            self.l.info(activity)
 
             is_progress = self._is_real_progress(user_data, activity)
             user_data["last_activity_id"] = activity_id
 
             if not is_progress:
-                self.l.debug(f"Activity for Discord ID {discord_id} is not real progress.")
+                self.l.debug(f"Activity for member {discord_id} is not real progress.")
                 self.l.debug("Skipping streak update and notification...")
 
                 continue
 
             self._update_streak(user_data, activity["createdAt"])
 
-            user = await self.bot.fetch_user(int(discord_id))
-            progress = self._extract_progress(activity)
-
             embed = Embed(
                 color=Color.ash_theme(),
                 title=activity["media"]["title"]["romaji"],
                 description=(
-                    f"{activity['status'].title()}: **{progress}**\n"
-                    f"Current Streak: **{user_data['streak']}** "
-                    f"{'days' if user_data['streak'] != 1 else 'day'}\n\n"
+                    f"{activity['status'].title()}: **{self._extract_progress(activity)}**\n"
+                    f"Current Streak: **{user_data['streak']}** {'days' if user_data['streak'] != 1 else 'day'}\n\n"
                     f"[**AniList**](https://anilist.co/anime/{activity['media']['id']}) | "
-                    f"[**MyAnimeList**](https://myanimelist.net/anime/{activity['media']['idMal']})"
+                    f"[**MyAnimeList**](https://myanimelist.net/anime/{activity['media']['idMal']})\n\n"
+                    f"<t:{activity['createdAt']}:R>"
                 ),
             )
+
+            user = await self.bot.fetch_user(int(discord_id))
 
             embed.set_author(
                 name=f"{activity['user']['name']} (@{user.name})" if user else activity["user"]["name"],
@@ -316,8 +316,20 @@ class AniListCog(commands.Cog):
                 icon_url=activity["user"]["avatar"]["medium"],
             )
 
-            self.l.info(f"Sending AniList update embed for Discord ID {discord_id}...")
-            await channel.send(embed=embed)
+            self.l.info(f"Sending AniList update embed for member {discord_id}...")
+
+            old_message_id = user_data.get("last_message_id")
+
+            if old_message_id:
+                try:
+                    await channel.get_partial_message(old_message_id).delete()
+                    self.l.debug(f"Deleted previous AniList message for {discord_id}.")
+
+                except Exception:
+                    self.l.debug("Previous message already deleted or inaccessible.")
+
+            new_message = await channel.send(embed=embed)
+            user_data["last_message_id"] = new_message.id
 
         SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
         self.l.info("AniList update cycle completed and data saved.")
@@ -376,8 +388,9 @@ class AniListCog(commands.Cog):
         data = self._load_data()
         data["users"][str(member.id)] = {
             "anilist": username,
-            "last_activity_at": 0,
-            "last_activity_id": 0,
+            "last_activity_at": None,
+            "last_activity_id": None,
+            "last_message_id": None,
             "progress_cache": {},
             "streak": 0,
             "synced": False,
