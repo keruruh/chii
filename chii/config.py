@@ -25,7 +25,7 @@ class Config:
     REPOSTS_DATA_PATH = _ROOT_PATH / "data" / "reposts.json"
     REPOSTS_TEMP_DIR = _ROOT_PATH / "data" / "temp"
     REPOSTS_URL_REGEX = r"(https?://(?:www\.)?(?:tiktok\.com|instagram\.com)/[^\s]+)"
-    REPOSTS_MAX_SIZE_MB = 8
+    REPOSTS_MAX_SIZE_MB = 7  # Recommended to set it to ~1 MB less than the current server's limit.
 
     LOGS_DIR = _ROOT_PATH / "data" / "logs"
     LOGS_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"

@@ -132,7 +132,7 @@ class VideoWorker:
             self.l.error(f"Compression failed. The {output} file was not created.")
             return None
 
-        if output.stat().st_size > max_bytes:
+        if output.stat().st_size > max_bytes + (1 * 1024 * 1024):
             self.l.error(f"Compressed file {output} exceeds maximum size of {max_bytes} bytes.")
             return None
 
