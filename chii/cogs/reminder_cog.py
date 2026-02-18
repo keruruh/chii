@@ -6,22 +6,18 @@ import time
 import typing as t
 import uuid
 
-import discord
-import discord.ext.commands
+from discord import Interaction, app_commands
+from discord.ext import commands
 
 from chii.config import Config
 from chii.utils import JSON, SimpleUtils
 
 
-class ReminderCog(discord.ext.commands.Cog):
+class ReminderCog(commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
+    group = app_commands.Group(name="reminder", description="Manage personal reminders and scheduled notifications.")
 
-    group = discord.app_commands.Group(
-        name="reminder",
-        description="Manage personal reminders and scheduled notifications.",
-    )
-
-    def __init__(self, bot: discord.ext.commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.reminders = {}
         self.tasks = {}
@@ -101,6 +97,7 @@ class ReminderCog(discord.ext.commands.Cog):
 
         if channel is None:
             self.l.debug(f"Channel {reminder['channel_id']} was not found in cache. Attempting to fetch...")
+
             try:
                 channel = await self.bot.fetch_channel(reminder["channel_id"])
             except Exception as e:
@@ -149,16 +146,11 @@ class ReminderCog(discord.ext.commands.Cog):
                 raise ValueError("Invalid time format.")
 
     @group.command(name="set", description=("Create a new reminder that will notify you after a specified time."))
-    @discord.app_commands.describe(
+    @app_commands.describe(
         time_input=("The time after which the reminder should trigger(e.g.: 10s, 5m, 1h, 3d)."),
         message="Optional custom message for your reminder (max. 100 characters).",
     )
-    async def reminder_set(
-        self: t.Self,
-        interaction: discord.Interaction,
-        time_input: str,
-        message: str | None,
-    ) -> None:
+    async def reminder_set(self: t.Self, interaction: Interaction, time_input: str, message: str | None) -> None:
         self.l.info(f"Received reminder set command from user {interaction.user.id}.")
 
         try:
@@ -209,7 +201,7 @@ class ReminderCog(discord.ext.commands.Cog):
         await interaction.response.send_message(f"I will remind you **<t:{trigger}:R>**.")
 
     @group.command(name="list", description="Show a list of your currently scheduled reminders.")
-    async def reminder_list(self, interaction: discord.Interaction) -> None:
+    async def reminder_list(self, interaction: Interaction) -> None:
         self.l.info(f"Received reminder list command from user {interaction.user.id}.")
 
         user_reminders = [r for r in self.reminders.values() if r["user_id"] == interaction.user.id]
@@ -225,8 +217,8 @@ class ReminderCog(discord.ext.commands.Cog):
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     @group.command(name="cancel", description="Cancel an existing reminder.")
-    @discord.app_commands.describe(reminder_id="The ID of the reminder you want to cancel.")
-    async def reminder_cancel(self: t.Self, interaction: discord.Interaction, reminder_id: str) -> None:
+    @app_commands.describe(reminder_id="The ID of the reminder you want to cancel.")
+    async def reminder_cancel(self: t.Self, interaction: Interaction, reminder_id: str) -> None:
         self.l.info(f"Received reminder cancel command for reminder {reminder_id} from user {interaction.user.id}.")
 
         reminder = self.reminders.get(reminder_id)
@@ -251,11 +243,11 @@ class ReminderCog(discord.ext.commands.Cog):
         await interaction.response.send_message("Reminder cancelled.", ephemeral=True)
 
     @group.command(name="edit", description="Edit the message of an existing reminder.")
-    @discord.app_commands.describe(
+    @app_commands.describe(
         reminder_id="The ID of the reminder you want to edit.",
         new_message="The new reminder message (max 100 characters).",
     )
-    async def reminder_edit(self: t.Self, interaction: discord.Interaction, reminder_id: str, new_message: str) -> None:
+    async def reminder_edit(self: t.Self, interaction: Interaction, reminder_id: str, new_message: str) -> None:
         self.l.info(f"Received reminder edit command for reminder {reminder_id} from user {interaction.user.id}.")
 
         reminder = self.reminders.get(reminder_id)
@@ -274,5 +266,5 @@ class ReminderCog(discord.ext.commands.Cog):
         await interaction.response.send_message("Reminder updated.", ephemeral=True)
 
 
-async def setup(bot: discord.ext.commands.Bot) -> None:
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(ReminderCog(bot))

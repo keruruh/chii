@@ -1,8 +1,8 @@
 import logging
 import pathlib
 
-import discord
-import discord.ext.commands
+from discord import Intents
+from discord.ext import commands
 
 from chii.config import Config
 from chii.utils import LogHandler, VideoWorker
@@ -11,10 +11,10 @@ LogHandler.setup()
 
 l = logging.getLogger("chii")
 
-intents = discord.Intents.default()
+intents = Intents.default()
 intents.message_content = True
 
-bot = discord.ext.commands.Bot(
+bot = commands.Bot(
     owner_id=Config.BOT_OWNER,
     command_prefix=Config.BOT_PREFIX,
     intents=intents,

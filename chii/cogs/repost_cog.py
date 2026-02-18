@@ -3,18 +3,18 @@ import logging
 import pathlib
 import re
 
-import discord
-import discord.ext.commands
+from discord import Interaction, Message, TextChannel, app_commands
+from discord.ext import commands
 
 from chii.config import Config
 from chii.utils import JSON, SimpleUtils
 
 
-class RepostCog(discord.ext.commands.Cog):
+class RepostCog(commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
-    group = discord.app_commands.Group(name="repost", description="Reposting commands.")
+    group = app_commands.Group(name="repost", description="Reposting commands.")
 
-    def __init__(self, bot: discord.ext.commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.url_regex = re.compile(pattern=Config.REPOSTS_URL_REGEX, flags=re.IGNORECASE)
 
@@ -32,6 +32,7 @@ class RepostCog(discord.ext.commands.Cog):
             return default_data.copy()
 
         self.l.debug(f"Loading reposts data from {Config.REPOSTS_DATA_PATH}...")
+
         with pathlib.Path(Config.REPOSTS_DATA_PATH).open(encoding="utf-8") as f:
             data = json.load(f)
 
@@ -41,8 +42,8 @@ class RepostCog(discord.ext.commands.Cog):
 
         return data
 
-    @discord.ext.commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
+    @commands.Cog.listener()
+    async def on_message(self, message: Message) -> None:
         if message.author.bot:
             return
 
@@ -67,9 +68,9 @@ class RepostCog(discord.ext.commands.Cog):
         self.l.info(f"Enqueued video repost task for message {message.id}.")
 
     @group.command(name="add", description="Start monitoring a channel for reposting videos.")
-    @discord.ext.commands.is_owner()
-    @discord.app_commands.describe(channel="Channel the bot should watch for videos.")
-    async def repost_add(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+    @commands.is_owner()
+    @app_commands.describe(channel="Channel the bot should watch for videos.")
+    async def repost_add(self, interaction: Interaction, channel: TextChannel) -> None:
         self.l.info(f"Received repost add command for channel {channel.id}.")
 
         data = self._load_data()
@@ -87,9 +88,9 @@ class RepostCog(discord.ext.commands.Cog):
         await interaction.response.send_message(f"Added {channel.mention} as repost channel.", ephemeral=True)
 
     @group.command(name="remove", description="Stop monitoring a channel for reposts.")
-    @discord.ext.commands.is_owner()
-    @discord.app_commands.describe(channel="Channel to remove from monitoring.")
-    async def repost_remove(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+    @commands.is_owner()
+    @app_commands.describe(channel="Channel to remove from monitoring.")
+    async def repost_remove(self, interaction: Interaction, channel: TextChannel) -> None:
         self.l.info(f"Received repost remove command for channel {channel.id}.")
 
         data = self._load_data()
@@ -107,8 +108,8 @@ class RepostCog(discord.ext.commands.Cog):
         await interaction.response.send_message(f"Removed {channel.mention} from the watching list.", ephemeral=True)
 
     @group.command(name="list", description="Show all channels that are currently being monitored for videos.")
-    @discord.ext.commands.is_owner()
-    async def repost_list(self, interaction: discord.Interaction) -> None:
+    @commands.is_owner()
+    async def repost_list(self, interaction: Interaction) -> None:
         self.l.info("Received repost list command.")
 
         data = self._load_data()
@@ -131,5 +132,5 @@ class RepostCog(discord.ext.commands.Cog):
         await interaction.response.send_message(message, ephemeral=True)
 
 
-async def setup(bot: discord.ext.commands.Bot) -> None:
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(RepostCog(bot))

@@ -3,23 +3,18 @@ import logging
 import pathlib
 
 import aiohttp
-import discord
-import discord.ext.commands
-import discord.ext.tasks
+from discord import Color, Embed, Interaction, Member, TextChannel, app_commands
+from discord.ext import commands, tasks
 
 from chii.config import Config
 from chii.utils import JSON, SimpleUtils
 
 
-class AniListCog(discord.ext.commands.Cog):
+class AniListCog(commands.Cog):
     l = logging.getLogger(f"chii.cogs.{__qualname__}")
+    group = app_commands.Group(name="anilist", description="Manage and track AniList activity for Discord users.")
 
-    group = discord.app_commands.Group(
-        name="anilist",
-        description="Manage and track AniList activity for Discord users.",
-    )
-
-    def __init__(self, bot: discord.ext.commands.Bot) -> None:
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.session = aiohttp.ClientSession()
 
@@ -124,11 +119,12 @@ class AniListCog(discord.ext.commands.Cog):
             progress = int(text)
             self.l.debug(f"Extracted progress value of {progress}.")
 
-            return progress
-
         except (ValueError, TypeError):
             self.l.warning(f'Failed to extract numeric progress from raw value "{raw}".')
             return None
+
+        else:
+            return progress
 
     def _is_real_progress(self, user_data: JSON, activity: JSON) -> bool:
         if not self._is_consumption_activity(activity):
@@ -281,6 +277,7 @@ class AniListCog(discord.ext.commands.Cog):
                 self.l.info(f"Syncing user data for Discord ID {discord_id}.")
                 user_data["last_activity_id"] = activity_id
                 user_data["synced"] = True
+
                 continue
 
             if activity_id <= last_seen:
@@ -293,6 +290,7 @@ class AniListCog(discord.ext.commands.Cog):
             if not is_progress:
                 self.l.debug(f"Activity for Discord ID {discord_id} is not real progress.")
                 self.l.debug("Skipping streak update and notification...")
+
                 continue
 
             self._update_streak(user_data, activity["createdAt"])
@@ -300,8 +298,8 @@ class AniListCog(discord.ext.commands.Cog):
             user = await self.bot.fetch_user(int(discord_id))
             progress = self._extract_progress(activity)
 
-            embed = discord.Embed(
-                color=discord.Color.ash_theme(),
+            embed = Embed(
+                color=Color.ash_theme(),
                 title=activity["media"]["title"]["romaji"],
                 description=(
                     f"{activity['status'].title()}: **{progress}**\n"
@@ -324,14 +322,14 @@ class AniListCog(discord.ext.commands.Cog):
         SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
         self.l.info("AniList update cycle completed and data saved.")
 
-    @discord.ext.tasks.loop(seconds=Config.ANILIST_NORMAL_UPDATE_TIME_SEC)
+    @tasks.loop(seconds=Config.ANILIST_NORMAL_UPDATE_TIME_SEC)
     async def _check_updates(self) -> None:
         self.l.debug("Normal update loop triggered.")
 
         await self.bot.wait_until_ready()
         await self._run_update_cycle()
 
-    @discord.ext.tasks.loop(seconds=Config.ANILIST_DEBUG_UPDATE_TIME_SEC)
+    @tasks.loop(seconds=Config.ANILIST_DEBUG_UPDATE_TIME_SEC)
     async def _debug_updates(self) -> None:
         self.l.debug("Debug update loop triggered.")
 
@@ -339,8 +337,8 @@ class AniListCog(discord.ext.commands.Cog):
         await self._run_update_cycle()
 
     @group.command(name="force", description="Manually force an AniList update check for all linked users.")
-    @discord.ext.commands.is_owner()
-    async def anilist_force(self, interaction: discord.Interaction) -> None:
+    @commands.is_owner()
+    async def anilist_force(self, interaction: Interaction) -> None:
         self.l.info("Manual AniList update forced by owner.")
 
         await interaction.response.defer(ephemeral=True)
@@ -348,9 +346,9 @@ class AniListCog(discord.ext.commands.Cog):
         await interaction.followup.send("Manual update executed.", ephemeral=True)
 
     @group.command(name="channel", description="Set the channel where AniList activity updates will be posted.")
-    @discord.ext.commands.is_owner()
-    @discord.app_commands.describe(channel="The text channel that will receive AniList update notifications.")
-    async def anilist_channel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+    @commands.is_owner()
+    @app_commands.describe(channel="The text channel that will receive AniList update notifications.")
+    async def anilist_channel(self, interaction: Interaction, channel: TextChannel) -> None:
         self.l.info(f"Setting AniList notification channel to {channel.id}...")
 
         data = self._load_data()
@@ -365,12 +363,12 @@ class AniListCog(discord.ext.commands.Cog):
         )
 
     @group.command(name="link", description="Link a Discord user to their AniList account for activity tracking.")
-    @discord.ext.commands.is_owner()
-    @discord.app_commands.describe(
+    @commands.is_owner()
+    @app_commands.describe(
         member="The Discord member whose AniList account will be linked.",
         username="The AniList username to track (case-sensitive).",
     )
-    async def anilist_link(self, interaction: discord.Interaction, member: discord.Member, username: str) -> None:
+    async def anilist_link(self, interaction: Interaction, member: Member, username: str) -> None:
         self.l.info(f"Linking Discord user {member.id} to AniList username '{username}'.")
 
         await interaction.response.defer(ephemeral=True)
@@ -394,5 +392,5 @@ class AniListCog(discord.ext.commands.Cog):
         )
 
 
-async def setup(bot: discord.ext.commands.Bot) -> None:
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(AniListCog(bot))

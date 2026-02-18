@@ -2,25 +2,25 @@ import asyncio
 import logging
 import pathlib
 import subprocess
-import typing
+import typing as t
 import uuid
 
-import discord
-import discord.ext.commands
 import yt_dlp
+from discord import File, Message
+from discord.ext import commands
 
 from chii.config import Config
 
 
-class VideoJob(typing.TypedDict):
-    message: discord.Message
+class VideoJob(t.TypedDict):
+    message: Message
     url: str
 
 
 class VideoWorker:
     l = logging.getLogger(f"chii.utils.{__qualname__}")
 
-    def __init__(self: typing.Self, bot: discord.ext.commands.Bot, worker_count: int, max_queue_size: int) -> None:
+    def __init__(self: t.Self, bot: commands.Bot, worker_count: int, max_queue_size: int) -> None:
         self.bot = bot
 
         self.queue = asyncio.Queue(max_queue_size)
@@ -30,7 +30,7 @@ class VideoWorker:
 
         self.l.info(f"VideoWorker initialized with {worker_count} workers and a max queue size of {max_queue_size}.")
 
-    def _download_video(self: typing.Self, url: str) -> pathlib.Path | None:
+    def _download_video(self: t.Self, url: str) -> pathlib.Path | None:
         self.l.info(f"Starting download for video URL: {url}...")
 
         Config.REPOSTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
@@ -41,13 +41,13 @@ class VideoWorker:
         class _YTDLogger:
             _l = VideoWorker.l
 
-            def debug(self: typing.Self, msg: str) -> None:
+            def debug(self: t.Self, msg: str) -> None:
                 self._l.debug(f"[YT_DLP]: {msg}.")
 
-            def warning(self: typing.Self, msg: str) -> None:
+            def warning(self: t.Self, msg: str) -> None:
                 self._l.warning(f"[YT_DLP]: {msg}.")
 
-            def error(self: typing.Self, msg: str) -> None:
+            def error(self: t.Self, msg: str) -> None:
                 self._l.error(f"[YT_DLP]: {msg}.")
 
         options = {
@@ -75,7 +75,7 @@ class VideoWorker:
 
         return output
 
-    def _get_duration(self: typing.Self, path: pathlib.Path) -> float:
+    def _get_duration(self: t.Self, path: pathlib.Path) -> float:
         self.l.debug(f"Getting duration for file {path}...")
 
         # fmt: off
@@ -101,7 +101,7 @@ class VideoWorker:
         else:
             return duration
 
-    def _compress_to_limit(self: typing.Self, input_file: pathlib.Path) -> pathlib.Path | None:
+    def _compress_to_limit(self: t.Self, input_file: pathlib.Path) -> pathlib.Path | None:
         self.l.info(f"Starting compression for {input_file}...")
 
         duration = self._get_duration(input_file)
@@ -139,7 +139,7 @@ class VideoWorker:
         self.l.info(f"Compressed video saved to {output}.")
         return output
 
-    async def _process_job(self: typing.Self, job: VideoJob, worker_id: int) -> None:
+    async def _process_job(self: t.Self, job: VideoJob, worker_id: int) -> None:
         message = job["message"]
         url = job["url"]
 
@@ -164,7 +164,6 @@ class VideoWorker:
                 return
 
         user_text = message.content.replace(url, "").strip()
-
         member = message.guild.get_member(message.author.id) if message.guild else None
         nick = member.nick if member and member.nick else message.author.display_name
         username = message.author.name
@@ -178,13 +177,13 @@ class VideoWorker:
         except Exception as e:
             self.l.warning(f"[Video Worker {worker_id}]: Could not delete message: {e}.")
 
-        await message.channel.send(repost_text, file=discord.File(compressed))
+        await message.channel.send(repost_text, file=File(compressed))
         self.l.info(f"[Video Worker {worker_id}]: Sent reposted video to channel {message.channel.id}.")
 
         compressed.unlink(missing_ok=True)
         self.l.info(f"[Video Worker {worker_id}]: Removed compressed video file {compressed}.")
 
-    async def _worker_loop(self: typing.Self, worker_id: int) -> None:
+    async def _worker_loop(self: t.Self, worker_id: int) -> None:
         self.l.info(f"[Video Worker {worker_id}]: Ready.")
 
         while True:
@@ -201,7 +200,7 @@ class VideoWorker:
                 self.l.debug(f"[Video Worker {worker_id}]: Job for URL {job['url']} completed and removed from queue.")
                 self.queue.task_done()
 
-    async def enqueue(self: typing.Self, job: VideoJob) -> None:
+    async def enqueue(self: t.Self, job: VideoJob) -> None:
         url = job["url"]
 
         if url in self.active_urls:
