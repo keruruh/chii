@@ -26,8 +26,13 @@ class LogHandler:
 
         main_handler.setFormatter(formatter)
 
-        root_logger.setLevel(logging.INFO)
+        # console_handler = logging.StreamHandler()
+        # console_handler.setLevel(logging.DEBUG)
+        # console_handler.setFormatter(formatter)
+
+        root_logger.setLevel(logging.DEBUG)
         root_logger.addHandler(main_handler)
+        # root_logger.addHandler(console_handler)
 
         discord_handler = RotatingFileHandler(
             filename=Config.LOGS_DIR / "discord.log",

@@ -37,7 +37,8 @@ class ReminderCog(commands.Cog):
 
     def _load_data(self) -> None:
         if not Config.REMINDERS_DATA_PATH.exists():
-            self.l.info(f"Reminders data file not found at {Config.REMINDERS_DATA_PATH}. Skipping load...")
+            self.l.info(f"Reminders data file not found at {Config.REMINDERS_DATA_PATH}. Creating new data file...")
+            SimpleUtils.save_data(Config.REMINDERS_DATA_PATH, [])
             return
 
         self.l.debug(f"Loading reminders from {Config.REMINDERS_DATA_PATH}...")
@@ -125,7 +126,7 @@ class ReminderCog(commands.Cog):
         self.tasks.pop(reminder_id, None)
 
         self.l.debug(f"Reminder {reminder_id} removed from memory and tasks.")
-        SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        SimpleUtils.save_data(Config.REMINDERS_DATA_PATH, list(self.reminders.values()))
         self.l.info(f"Reminders data saved after sending reminder {reminder_id}.")
 
     @staticmethod
@@ -187,18 +188,21 @@ class ReminderCog(commands.Cog):
             "channel_id": interaction.channel.id,
             "guild_id": interaction.guild_id,
             "message": message,
-            "trigger": int(time.time() + seconds),
+            "trigger": trigger,
         }
 
         self.reminders[reminder_id] = reminder
         self.l.info(f"Created reminder {reminder_id} for user {interaction.user.id}.")
 
-        SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        SimpleUtils.save_data(Config.REMINDERS_DATA_PATH, list(self.reminders.values()))
         self.l.info(f"Reminders data saved after creating reminder {reminder_id}.")
 
         self._schedule_reminder(reminder)
 
-        await interaction.response.send_message(f"I will remind you **<t:{trigger}:R>**.")
+        await interaction.response.send_message(
+            content=f"I will remind you **<t:{trigger}:R>**.",
+            delete_after=seconds,
+        )
 
     @group.command(name="list", description="Show a list of your currently scheduled reminders.")
     async def reminder_list(self, interaction: Interaction) -> None:
@@ -237,7 +241,7 @@ class ReminderCog(commands.Cog):
         self.reminders.pop(reminder_id, None)
         self.l.info(f"Reminder {reminder_id} cancelled and removed.")
 
-        SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        SimpleUtils.save_data(Config.REMINDERS_DATA_PATH, list(self.reminders.values()))
         self.l.info(f"Reminders data saved after cancelling reminder {reminder_id}.")
 
         await interaction.response.send_message("Reminder cancelled.", ephemeral=True)
@@ -260,7 +264,7 @@ class ReminderCog(commands.Cog):
         reminder["message"] = new_message
         self.l.info(f"Reminder {reminder_id} message updated by user {interaction.user.id}.")
 
-        SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        SimpleUtils.save_data(Config.REMINDERS_DATA_PATH, list(self.reminders.values()))
         self.l.info(f"Reminders data saved after editing reminder {reminder_id}.")
 
         await interaction.response.send_message("Reminder updated.", ephemeral=True)
