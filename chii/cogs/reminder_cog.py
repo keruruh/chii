@@ -26,11 +26,13 @@ class ReminderCog(discord.ext.commands.Cog):
         self.reminders = {}
         self.tasks = {}
 
+        self.l.info("Starting ReminderCog scheduler initialization...")
         self.bot.loop.create_task(self._initialize_scheduler())
-
         self.l.info("ReminderCog initialized.")
 
     async def cog_unload(self) -> None:
+        self.l.info("Unloading ReminderCog and cancelling all reminder tasks...")
+
         for task in self.tasks.values():
             task.cancel()
 
@@ -39,7 +41,10 @@ class ReminderCog(discord.ext.commands.Cog):
 
     def _load_data(self) -> None:
         if not Config.REMINDERS_DATA_PATH.exists():
+            self.l.info(f"Reminders data file not found at {Config.REMINDERS_DATA_PATH}. Skipping load...")
             return
+
+        self.l.debug(f"Loading reminders from {Config.REMINDERS_DATA_PATH}...")
 
         try:
             with pathlib.Path(Config.REMINDERS_DATA_PATH).open(encoding="utf-8") as f:
@@ -57,39 +62,49 @@ class ReminderCog(discord.ext.commands.Cog):
         reminder_id = reminder["id"]
 
         if reminder_id in self.tasks:
+            self.l.debug(f"Cancelling existing task for reminder {reminder_id}...")
             self.tasks[reminder_id].cancel()
 
+        self.l.info(f"Scheduling reminder task for reminder {reminder_id}...")
         task = asyncio.create_task(self._reminder_worker(reminder_id))
         self.tasks[reminder_id] = task
 
     async def _initialize_scheduler(self) -> None:
+        self.l.info("Initializing reminder scheduler...")
+
         await self.bot.wait_until_ready()
 
         self._load_data()
 
         for reminder in self.reminders.values():
+            self.l.debug(f"Scheduling reminder {reminder['id']} from disk...")
             self._schedule_reminder(reminder)
 
         self.l.info("Reminder scheduler ready.")
 
     async def _reminder_worker(self: t.Self, reminder_id: str) -> None:
+        self.l.info(f"Reminder worker started for reminder {reminder_id}.")
+
         reminder = self.reminders.get(reminder_id)
 
         if not reminder:
+            self.l.warning(f"Reminder {reminder_id} not found. Worker exiting...")
             return
 
         delay = int(reminder["trigger"] - time.time())
 
         if delay > 0:
+            self.l.debug(f"Sleeping for {delay} seconds before triggering reminder {reminder_id}...")
             await asyncio.sleep(delay)
 
         channel = self.bot.get_channel(reminder["channel_id"])
 
         if channel is None:
+            self.l.debug(f"Channel {reminder['channel_id']} was not found in cache. Attempting to fetch...")
             try:
                 channel = await self.bot.fetch_channel(reminder["channel_id"])
             except Exception as e:
-                self.l.error(f"Failed to fetch channel: {e}")
+                self.l.error(f"Failed to fetch channel: {e}.")
                 return
 
         try:
@@ -112,7 +127,9 @@ class ReminderCog(discord.ext.commands.Cog):
         self.reminders.pop(reminder_id, None)
         self.tasks.pop(reminder_id, None)
 
+        self.l.debug(f"Reminder {reminder_id} removed from memory and tasks.")
         SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        self.l.info(f"Reminders data saved after sending reminder {reminder_id}.")
 
     @staticmethod
     def _parse_time(time_string: str) -> float:
@@ -129,7 +146,7 @@ class ReminderCog(discord.ext.commands.Cog):
             case "d":
                 return value * 86400
             case _:
-                raise ValueError("Invalid time format")
+                raise ValueError("Invalid time format.")
 
     @group.command(name="set", description=("Create a new reminder that will notify you after a specified time."))
     @discord.app_commands.describe(
@@ -142,16 +159,17 @@ class ReminderCog(discord.ext.commands.Cog):
         time_input: str,
         message: str | None,
     ) -> None:
+        self.l.info(f"Received reminder set command from user {interaction.user.id}.")
+
         try:
             seconds = self._parse_time(time_input)
         except Exception:
-            await interaction.response.send_message(
-                "Invalid time format.",
-                ephemeral=True,
-            )
+            self.l.error("Invalid time format provided for reminder.")
+            await interaction.response.send_message("Invalid time format.", ephemeral=True)
             return
 
         if seconds < Config.REMINDERS_MIN_TIME_SEC:
+            self.l.warning("Reminder time below minimum allowed.")
             await interaction.response.send_message(
                 "Your must set your reminder to at least 10 seconds.",
                 ephemeral=True,
@@ -160,6 +178,7 @@ class ReminderCog(discord.ext.commands.Cog):
             return
 
         if message and len(message) > Config.REMINDERS_MAX_MESSAGE_LEN:
+            self.l.warning("Reminder message exceeded maximum length.")
             await interaction.response.send_message("Your message must not exceed 100 characters.", ephemeral=True)
             return
 
@@ -180,41 +199,54 @@ class ReminderCog(discord.ext.commands.Cog):
         }
 
         self.reminders[reminder_id] = reminder
+        self.l.info(f"Created reminder {reminder_id} for user {interaction.user.id}.")
+
         SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        self.l.info(f"Reminders data saved after creating reminder {reminder_id}.")
+
         self._schedule_reminder(reminder)
 
         await interaction.response.send_message(f"I will remind you **<t:{trigger}:R>**.")
 
     @group.command(name="list", description="Show a list of your currently scheduled reminders.")
     async def reminder_list(self, interaction: discord.Interaction) -> None:
+        self.l.info(f"Received reminder list command from user {interaction.user.id}.")
+
         user_reminders = [r for r in self.reminders.values() if r["user_id"] == interaction.user.id]
 
         if not user_reminders:
+            self.l.info(f"User {interaction.user.id} has no reminders.")
             await interaction.response.send_message(content="You have no reminders.", ephemeral=True)
-
             return
 
         lines = [f'- **{r["id"]}** <t:{int(r["trigger"])}:R> "{r["message"]}"' for r in user_reminders]
 
+        self.l.debug(f"Listing {len(user_reminders)} reminders for user {interaction.user.id}.")
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     @group.command(name="cancel", description="Cancel an existing reminder.")
     @discord.app_commands.describe(reminder_id="The ID of the reminder you want to cancel.")
     async def reminder_cancel(self: t.Self, interaction: discord.Interaction, reminder_id: str) -> None:
+        self.l.info(f"Received reminder cancel command for reminder {reminder_id} from user {interaction.user.id}.")
+
         reminder = self.reminders.get(reminder_id)
 
         if not reminder or reminder["user_id"] != interaction.user.id:
+            self.l.warning(f"Reminder {reminder_id} not found or not owned by user {interaction.user.id}.")
             await interaction.response.send_message("Reminder not found.", ephemeral=True)
             return
 
         task = self.tasks.pop(reminder_id, None)
 
         if task:
+            self.l.debug(f"Cancelling task for reminder {reminder_id}.")
             task.cancel()
 
         self.reminders.pop(reminder_id, None)
+        self.l.info(f"Reminder {reminder_id} cancelled and removed.")
 
         SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        self.l.info(f"Reminders data saved after cancelling reminder {reminder_id}.")
 
         await interaction.response.send_message("Reminder cancelled.", ephemeral=True)
 
@@ -224,15 +256,20 @@ class ReminderCog(discord.ext.commands.Cog):
         new_message="The new reminder message (max 100 characters).",
     )
     async def reminder_edit(self: t.Self, interaction: discord.Interaction, reminder_id: str, new_message: str) -> None:
+        self.l.info(f"Received reminder edit command for reminder {reminder_id} from user {interaction.user.id}.")
+
         reminder = self.reminders.get(reminder_id)
 
         if not reminder or reminder["user_id"] != interaction.user.id:
+            self.l.warning(f"Reminder {reminder_id} not found or not owned by user {interaction.user.id}.")
             await interaction.response.send_message("Reminder not found.", ephemeral=True)
             return
 
         reminder["message"] = new_message
+        self.l.info(f"Reminder {reminder_id} message updated by user {interaction.user.id}.")
 
         SimpleUtils.save_data(path=Config.REMINDERS_DATA_PATH, data=list(self.reminders.values()))
+        self.l.info(f"Reminders data saved after editing reminder {reminder_id}.")
 
         await interaction.response.send_message("Reminder updated.", ephemeral=True)
 

@@ -31,6 +31,8 @@ class VideoWorker:
         self.l.info(f"VideoWorker initialized with {worker_count} workers and a max queue size of {max_queue_size}.")
 
     def _download_video(self: typing.Self, url: str) -> pathlib.Path | None:
+        self.l.info(f"Starting download for video URL: {url}...")
+
         Config.REPOSTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
         filename = f"{uuid.uuid4()}.mp4"
@@ -40,17 +42,17 @@ class VideoWorker:
             _l = VideoWorker.l
 
             def debug(self: typing.Self, msg: str) -> None:
-                self._l.debug(f"[YT_DLP]: {msg}")
+                self._l.debug(f"[YT_DLP]: {msg}.")
 
             def warning(self: typing.Self, msg: str) -> None:
-                self._l.warning(f"[YT_DLP]: {msg}")
+                self._l.warning(f"[YT_DLP]: {msg}.")
 
             def error(self: typing.Self, msg: str) -> None:
-                self._l.error(f"[YT_DLP]: {msg}")
+                self._l.error(f"[YT_DLP]: {msg}.")
 
         options = {
             "outtmpl": str(output),  # Has to be a string since yt-dlp works with os.
-            "format": "mp4/bestvideo+bestaudio/best",
+            "format": "mp4/bestvideo[height<=480]+bestaudio/best[height<=480]",  # Prioritize low quality for uploads.
             "quiet": True,
             "noplaylist": True,
             "cookiefile": None,
@@ -64,12 +66,18 @@ class VideoWorker:
             self.l.info(f"Downloaded video from {url} to {output}.")
 
         except Exception as e:
-            self.l.error(f"Failed to download video from {url}: {e}")
+            self.l.error(f"Failed to download video from {url}: {e}.")
             return None
 
-        return output if output.exists() else None
+        if not output.exists():
+            self.l.error(f"Download completed but output file {output} does not exist.")
+            return None
+
+        return output
 
     def _get_duration(self: typing.Self, path: pathlib.Path) -> float:
+        self.l.debug(f"Getting duration for file {path}...")
+
         # fmt: off
         command = [
             "ffprobe",
@@ -87,13 +95,15 @@ class VideoWorker:
             self.l.info(f"Got duration {duration}s for file {path}.")
 
         except Exception as e:
-            self.l.error(f"Failed to get duration for {path}: {e}")
+            self.l.error(f"Failed to get duration for {path}: {e}.")
             raise
 
         else:
             return duration
 
     def _compress_to_limit(self: typing.Self, input_file: pathlib.Path) -> pathlib.Path | None:
+        self.l.info(f"Starting compression for {input_file}...")
+
         duration = self._get_duration(input_file)
         max_bytes = Config.REPOSTS_MAX_SIZE_MB * 1024 * 1024
         bitrate = int(((max_bytes * 8) / duration) / 1000)
@@ -150,7 +160,7 @@ class VideoWorker:
             self.l.info(f"[Video Worker {worker_id}]: Removed original video file {video}.")
 
             if not compressed:
-                self.l.error(f"[Video Worker {worker_id}: Failed to compress video from {url}.")
+                self.l.error(f"[Video Worker {worker_id}]: Failed to compress video from {url}.")
                 return
 
         user_text = message.content.replace(url, "").strip()
@@ -166,7 +176,7 @@ class VideoWorker:
             self.l.info(f"[Video Worker {worker_id}]: Deleted original message from user {message.author.id}.")
 
         except Exception as e:
-            self.l.warning(f"[Video Worker {worker_id}]: Could not delete message: {e}")
+            self.l.warning(f"[Video Worker {worker_id}]: Could not delete message: {e}.")
 
         await message.channel.send(repost_text, file=discord.File(compressed))
         self.l.info(f"[Video Worker {worker_id}]: Sent reposted video to channel {message.channel.id}.")
@@ -180,12 +190,15 @@ class VideoWorker:
         while True:
             job = await self.queue.get()
 
+            self.l.debug(f"[Video Worker {worker_id}]: Picked up job for URL {job['url']} from queue.")
+
             try:
                 await self._process_job(job, worker_id)
             except Exception as e:
-                self.l.error(f"[Video Worker {worker_id}]: Error: {e}")
+                self.l.error(f"[Video Worker {worker_id}]: Error: {e}.")
             finally:
                 self.active_urls.discard(job["url"])
+                self.l.debug(f"[Video Worker {worker_id}]: Job for URL {job['url']} completed and removed from queue.")
                 self.queue.task_done()
 
     async def enqueue(self: typing.Self, job: VideoJob) -> None:
@@ -205,13 +218,18 @@ class VideoWorker:
         await self.queue.put(job)
 
     def start(self) -> None:
+        self.l.info("Starting video worker threads...")
+
         for i in range(self.worker_count):
             self.tasks.append(asyncio.create_task(self._worker_loop(i)))
 
         self.l.info(f"Started {self.worker_count} video workers.")
 
     async def stop(self) -> None:
+        self.l.info("Stopping all video worker tasks...")
+
         for task in self.tasks:
             task.cancel()
 
         await asyncio.gather(*self.tasks, return_exceptions=True)
+        self.l.info("All video worker tasks stopped.")
