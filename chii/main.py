@@ -9,7 +9,7 @@ from chii.utils import LogHandler, VideoWorker
 
 LogHandler.setup()
 
-l = logging.getLogger("chii")
+l = logging.getLogger("chii.main")
 
 intents = Intents.default()
 intents.message_content = True
