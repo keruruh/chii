@@ -33,10 +33,10 @@ class VideoWorker:
     def _download_video(self: t.Self, url: str) -> pathlib.Path | None:
         self.l.info(f"Starting download for video URL: {url}...")
 
-        Config.REPOSTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        Config.TEMP_PATH.mkdir(parents=True, exist_ok=True)
 
         filename = f"{uuid.uuid4()}.mp4"
-        output = Config.REPOSTS_TEMP_DIR / filename
+        output = Config.TEMP_PATH / filename
 
         class _YTDLogger:
             _l = VideoWorker.l
@@ -51,7 +51,7 @@ class VideoWorker:
                 self._l.error(f"[YT_DLP]: {msg}.")
 
         options = {
-            "outtmpl": str(output),  # Has to be a string since yt-dlp works with os.
+            "outtmpl": str(output),  # Has to be a string since yt-dlp works with os module.
             "format": "mp4/bestvideo[height<=480]+bestaudio/best[height<=480]",  # Prioritize low quality for uploads.
             "quiet": True,
             "noplaylist": True,
@@ -108,7 +108,7 @@ class VideoWorker:
         max_bytes = Config.REPOSTS_MAX_SIZE_MB * 1024 * 1024
         bitrate = int(((max_bytes * 8) / duration) / 1000)
 
-        output = Config.REPOSTS_TEMP_DIR / f"{uuid.uuid4()}_compressed.mp4"
+        output = Config.TEMP_PATH / f"{uuid.uuid4()}_compressed.mp4"
 
         # fmt: off
         command = [

@@ -90,6 +90,7 @@ class AniListCog(commands.Cog):
     def _is_consumption_activity(self, activity: JSON) -> bool:
         status = (activity.get("status") or "").lower()
         valid_prefixes = (
+            "completed",
             "watched",
             "rewatched",
             "read",
@@ -159,6 +160,7 @@ class AniListCog(commands.Cog):
         if not last:
             user_data["streak"] = 1
             self.l.info("Streak started for user.")
+
         else:
             last_day = last // 86400
             new_day = timestamp // 86400
@@ -166,9 +168,11 @@ class AniListCog(commands.Cog):
             if new_day == last_day:
                 self.l.debug("Activity occurred on the same day. Streak unchanged.")
                 return
+
             if new_day - last_day == 1:
                 user_data["streak"] += 1
                 self.l.info(f"Streak incremented to {user_data['streak']}.")
+
             else:
                 user_data["streak"] = 1
                 self.l.info("Streak reset to 1.")

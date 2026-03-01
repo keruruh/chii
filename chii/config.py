@@ -9,25 +9,30 @@ dotenv.load_dotenv()
 class Config:
     _ROOT_PATH = pathlib.Path(__file__).resolve().parent.parent / "chii"
 
+    DATA_PATH = _ROOT_PATH / "data"
+    LOGS_PATH = DATA_PATH / "logs"
+    TEMP_PATH = DATA_PATH / "temp"
+
+    ANILIST_DATA_PATH = DATA_PATH / "anilist.json"
+    REMINDERS_DATA_PATH = DATA_PATH / "reminders.json"
+    REPOSTS_DATA_PATH = DATA_PATH / "reposts.json"
+
     BOT_PREFIX = "!!"
     BOT_TOKEN = str(os.getenv("BOT_TOKEN", "0"))
     BOT_OWNER = int(os.getenv("BOT_OWNER", "0"))
 
-    ANILIST_DATA_PATH = _ROOT_PATH / "data" / "anilist.json"
-    ANILIST_NORMAL_UPDATE_TIME_SEC = float(60 * 60)
+    ANILIST_NORMAL_UPDATE_TIME_SEC = float(10 * 60)
     ANILIST_DEBUG_UPDATE_TIME_SEC = float(10)
 
-    REMINDERS_DATA_PATH = _ROOT_PATH / "data" / "reminders.json"
-    REMINDERS_MAX_COUNT = 1
+    REMINDERS_MAX_COUNT = 10
     REMINDERS_MAX_MESSAGE_LEN = 100
     REMINDERS_MIN_TIME_SEC = float(10)
 
-    REPOSTS_DATA_PATH = _ROOT_PATH / "data" / "reposts.json"
-    REPOSTS_TEMP_DIR = _ROOT_PATH / "data" / "temp"
     REPOSTS_URL_REGEX = r"(https?://(?:www\.)?(?:tiktok\.com|instagram\.com)/[^\s]+)"
-    REPOSTS_MAX_SIZE_MB = 7  # Recommended to set it to ~1 MB less than the current server's limit.
 
-    LOGS_DIR = _ROOT_PATH / "data" / "logs"
+    # Recommended to set it to ~1 MB less than the current Discord server's limit.
+    REPOSTS_MAX_SIZE_MB = 7
+
     LOGS_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
     LOGS_BACKUP_COUNT = 5
     LOGS_MAX_SIZE_MB = 10

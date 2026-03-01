@@ -9,7 +9,7 @@ class LogHandler:
 
     @classmethod
     def setup(cls) -> None:
-        Config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        Config.LOGS_PATH.mkdir(parents=True, exist_ok=True)
 
         formatter = logging.Formatter(Config.LOGS_FORMAT)
         root_logger = logging.getLogger()
@@ -18,7 +18,7 @@ class LogHandler:
             return
 
         main_handler = RotatingFileHandler(
-            filename=Config.LOGS_DIR / "chii.log",
+            filename=Config.LOGS_PATH / "chii.log",
             maxBytes=Config.LOGS_MAX_SIZE_MB * 1024 * 1024,
             backupCount=Config.LOGS_BACKUP_COUNT,
             encoding="utf-8",
@@ -26,16 +26,11 @@ class LogHandler:
 
         main_handler.setFormatter(formatter)
 
-        # console_handler = logging.StreamHandler()
-        # console_handler.setLevel(logging.DEBUG)
-        # console_handler.setFormatter(formatter)
-
         root_logger.setLevel(logging.DEBUG)
         root_logger.addHandler(main_handler)
-        # root_logger.addHandler(console_handler)
 
         discord_handler = RotatingFileHandler(
-            filename=Config.LOGS_DIR / "discord.log",
+            filename=Config.LOGS_PATH / "discord.log",
             maxBytes=Config.LOGS_MAX_SIZE_MB * 1024 * 1024,
             backupCount=Config.LOGS_BACKUP_COUNT,
             encoding="utf-8",

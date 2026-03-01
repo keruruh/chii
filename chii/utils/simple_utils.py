@@ -23,3 +23,22 @@ class SimpleUtils:
     @staticmethod
     def is_messageable(channel: t.Any, /) -> bool:
         return isinstance(channel, Messageable)
+
+    @staticmethod
+    def paginate_text(text: str) -> list[str]:
+        pages = []
+        buffer = ""
+        max_page_size = 1800
+
+        for line in text.splitlines(keepends=True):
+            if len(buffer) + len(line) > max_page_size:
+                pages.append(buffer)
+                buffer = line
+
+            else:
+                buffer += line
+
+        if buffer:
+            pages.append(buffer)
+
+        return pages

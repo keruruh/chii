@@ -146,9 +146,9 @@ class ReminderCog(commands.Cog):
             case _:
                 raise ValueError("Invalid time format.")
 
-    @group.command(name="set", description=("Create a new reminder that will notify you after a specified time."))
+    @group.command(name="set", description="Create a new reminder that will notify you after a specified time.")
     @app_commands.describe(
-        time_input=("The time after which the reminder should trigger(e.g.: 10s, 5m, 1h, 3d)."),
+        time_input="The time after which the reminder should trigger (e.g.: 10s, 5m, 1h, 3d).",
         message="Optional custom message for your reminder (max. 100 characters).",
     )
     async def reminder_set(self: t.Self, interaction: Interaction, time_input: str, message: str | None) -> None:
@@ -199,10 +199,7 @@ class ReminderCog(commands.Cog):
 
         self._schedule_reminder(reminder)
 
-        await interaction.response.send_message(
-            content=f"I will remind you **<t:{trigger}:R>**.",
-            delete_after=seconds,
-        )
+        await interaction.response.send_message(content=f"I will remind you **<t:{trigger}:R>**.", ephemeral=True)
 
     @group.command(name="list", description="Show a list of your currently scheduled reminders.")
     async def reminder_list(self, interaction: Interaction) -> None:
