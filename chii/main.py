@@ -20,6 +20,8 @@ bot = commands.Bot(
     intents=intents,
 )
 
+video_worker = VideoWorker(bot=bot, worker_count=3, max_queue_size=5)
+
 
 @bot.event
 async def on_ready() -> None:
@@ -33,7 +35,7 @@ async def on_ready() -> None:
 
 
 async def load_cogs() -> None:
-    for file in pathlib.Path("chii/cogs").rglob("*.py"):  # noqa: ASYNC240 - Startup-only filesystem scan.
+    for file in pathlib.Path("chii/cogs").rglob("*.py"):
         if file.name == "__init__.py":
             continue
 
@@ -48,8 +50,7 @@ async def start() -> None:
         await load_cogs()
         l.info("Cogs loaded.")
 
-        bot.video_worker = VideoWorker(bot=bot, worker_count=3, max_queue_size=5)
-        bot.video_worker.start()
+        video_worker.start()
 
         await bot.start(Config.BOT_TOKEN, reconnect=True)
         l.info("Bot started.")

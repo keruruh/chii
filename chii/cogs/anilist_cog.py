@@ -1,13 +1,14 @@
+import contextlib
 import json
 import logging
 import pathlib
 
 import aiohttp
-from discord import Color, Embed, Interaction, Member, TextChannel, app_commands
+from discord import Color, Embed, Interaction, Member, TextChannel, Thread, app_commands
 from discord.ext import commands, tasks
 
 from chii.config import Config
-from chii.utils import JSON, SimpleUtils
+from chii.utils import T_CHANNEL, T_DATA, T_NUMERIC, SimpleUtils
 
 
 class AniListCog(commands.Cog):
@@ -19,173 +20,172 @@ class AniListCog(commands.Cog):
         self.session = aiohttp.ClientSession()
 
         self.l.info("Starting AniListCog background update task...")
-        self._check_updates.start()
+        self.normal_updates.start()
         self.l.info("AniListCog initialized.")
 
-    async def cog_unload(self) -> None:
-        self.l.info("Unloading AniListCog and stopping background tasks...")
-
-        self._check_updates.cancel()
-
-        if self._debug_updates.is_running():
-            self.l.info("Stopping debug update task...")
-            self._debug_updates.cancel()
-
-        await self.session.close()
-        self.l.info("Closed aiohttp session.")
-
-    def _load_data(self) -> JSON:
+    def _load_data(self) -> T_DATA:
         default_data = {
             "channel_id": None,
             "users": {},
         }
 
         if not Config.ANILIST_DATA_PATH.exists():
-            self.l.info(f"AniList data file not found at {Config.ANILIST_DATA_PATH}.")
+            self.l.info(f'AniList data file not found at "{Config.ANILIST_DATA_PATH}".')
             self.l.info("Creating new data file...")
 
             SimpleUtils.save_data(Config.ANILIST_DATA_PATH, default_data)
 
             return default_data.copy()
 
-        self.l.debug(f"Loading AniList data from {Config.ANILIST_DATA_PATH}...")
+        self.l.debug(f'Loading AniList data from "{Config.ANILIST_DATA_PATH}"...')
 
         with pathlib.Path(Config.ANILIST_DATA_PATH).open(encoding="utf-8") as f:
             return json.load(f)
 
-    async def _query_graphql(self, query: str, variables: JSON | None = None) -> JSON | None:
-        api_url = "https://graphql.anilist.co"
-        payload = {
-            "url": api_url,
-            "json": {
-                "query": query,
-                "variables": variables or {},
-            },
-        }
+    async def cog_unload(self) -> None:
+        self.l.info("Unloading AniListCog and stopping background tasks...")
 
-        self.l.debug(f"Sending GraphQL query to AniList API with variables: {variables}...")
+        self.normal_updates.cancel()
 
-        try:
-            async with self.session.post(**payload) as response:
-                ok = 200
+        if self.debug_updates.is_running():
+            self.l.info("Stopping debug update task...")
+            self.debug_updates.cancel()
 
-                if response.status != ok:
-                    text = await response.text()
-                    self.l.error(f"AniList API Error {response.status}: {text}.")
-                    return None
+        await self.session.close()
+        self.l.info("Closed AIOHTTP session.")
 
-                data = await response.json()
+    @tasks.loop(seconds=Config.ANILIST_NORMAL_UPDATES_TIME_SEC)
+    async def normal_updates(self) -> None:
+        self.l.debug("Normal update loop triggered.")
 
-                if "errors" in data:
-                    self.l.error(f"AniList GraphQL Error: {data['errors']}.")
-                    return None
+        await self.bot.wait_until_ready()
+        await self.run_update_cycle()
 
-                self.l.info("Retrieved data from AniList.")
-                return data.get("data")
+    @tasks.loop(seconds=Config.ANILIST_DEBUG_UPDATES_TIME_SEC)
+    async def debug_updates(self) -> None:
+        self.l.debug("Debug update loop triggered.")
 
-        except Exception as e:
-            self.l.warning(f"AniList API Exception: {e}.")
-            return None
+        await self.bot.wait_until_ready()
+        await self.run_update_cycle()
 
-    def _is_consumption_activity(self, activity: JSON) -> bool:
-        status = (activity.get("status") or "").lower()
-        valid_prefixes = (
-            "completed",
-            "watched",
-            "rewatched",
-            "read",
-            "reread",
+    @group.command(name="force", description="Manually force an AniList update check for all linked users.")
+    @commands.is_owner()
+    async def anilist_force(self, interaction: Interaction) -> None:
+        self.l.info("Manual AniList update forced by owner.")
+
+        await interaction.response.defer(ephemeral=True)
+        await self.run_update_cycle()
+        await interaction.followup.send("Manual update executed.", ephemeral=True)
+
+    @group.command(name="channel", description="Set the channel where AniList activity updates will be posted.")
+    @app_commands.describe(channel="The text channel that will receive AniList update notifications.")
+    @commands.is_owner()
+    async def anilist_channel(self, interaction: Interaction, channel: TextChannel) -> None:
+        self.l.info(f"Setting AniList notification channel to {channel.id}...")
+
+        data = self._load_data()
+        data["channel_id"] = channel.id
+
+        SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
+        self.l.info(f"AniList notification channel set to {channel.id} and saved.")
+
+        await interaction.response.send_message(
+            f"Set {channel.mention} as AniList notification channel.",
+            ephemeral=True,
         )
 
-        if not status.startswith(valid_prefixes):
-            self.l.info(f'Ignoring non-consumption activity "{status}".')
-            return False
+    @group.command(name="link", description="Link a Discord user to their AniList account for activity tracking.")
+    @app_commands.describe(member="The Discord member whose AniList account will be linked.", username="The AniList username to track.")
+    @commands.is_owner()
+    async def anilist_link(self, interaction: Interaction, member: Member, username: str) -> None:
+        self.l.info(f"Linking Discord user {member.id} to AniList username '{username}'.")
 
-        self.l.debug(f'Activity "{status}" is a valid consumption activity.')
-        return True
+        await interaction.response.defer(ephemeral=True)
 
-    def _extract_progress(self, activity: JSON) -> int | None:
-        raw = activity.get("progress")
+        data = self._load_data()
+        data["users"][str(member.id)] = {
+            "anilist": username,
+            "last_activity_at": None,
+            "last_activity_id": None,
+            "last_message_id": None,
+            "progress_cache": {},
+            "streak": 0,
+            "synced": False,
+        }
 
-        if raw is None:
-            self.l.debug("No progress field found in activity.")
+        SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
+        self.l.info(f"Linked Discord user {member.id} to AniList username '{username}' and saved.")
+
+        await interaction.followup.send(
+            f"Linked {member.mention} to [{username}](<https://anilist.co/user/{username}>).",
+            ephemeral=True,
+        )
+
+    async def run_update_cycle(self) -> None:
+        self.l.info("Starting AniList update cycle...")
+
+        data = self._load_data()
+        users = data.get("users", {})
+
+        if not users:
+            self.l.info("No users linked for AniList tracking.")
+            return
+
+        channel = self.get_notification_channel(data["channel_id"])
+
+        if not channel:
+            return
+
+        batch, alias_map = await self.fetch_activity_batch(users)
+
+        if not batch:
+            self.l.warning("No activity data returned from AniList API!")
+            return
+
+        if not alias_map:
+            self.l.warning("No alias map returned from AniList API!")
+            return
+
+        for alias, activity in batch.items():
+            if not activity:
+                continue
+
+            discord_id = alias_map[alias]
+            user_data = users[discord_id]
+
+            if not await self.process_activity(channel, discord_id, user_data, activity):
+                continue
+
+        SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
+        self.l.info("AniList update cycle completed.")
+
+    def get_notification_channel(self, channel_id: int) -> T_CHANNEL:
+        if not channel_id:
+            self.l.warning("AniList notification channel is not set!")
             return None
 
-        try:
-            text = str(raw).strip()
+        channel = self.bot.get_channel(channel_id)
 
-            if "-" in text:
-                text = text.split("-")[-1].strip()
-
-            progress = int(text)
-            self.l.debug(f"Extracted progress value of {progress}.")
-
-        except (ValueError, TypeError):
-            self.l.warning(f'Failed to extract numeric progress from raw value "{raw}".')
+        if not channel or not SimpleUtils.is_guild_messageable(channel):
+            self.l.warning("Notification channel is not messageable!")
             return None
 
-        else:
-            return progress
+        return channel
 
-    def _is_real_progress(self, user_data: JSON, activity: JSON) -> bool:
-        if not self._is_consumption_activity(activity):
-            self.l.debug("Activity is not a consumption activity. Skipping progress check...")
-            return False
+    async def fetch_activity_batch(self, users: T_DATA) -> tuple[T_DATA | None, T_DATA | None]:
+        active_users = {}
+        alias_map = {}
 
-        media_id = str(activity["media"]["id"])
-        new_progress = self._extract_progress(activity)
+        for i, (discord_id, u) in enumerate(users.items()):
+            alias = f"user_{i}"
+            active_users[alias] = u["anilist"]
+            alias_map[alias] = discord_id
 
-        if new_progress is None:
-            self.l.info("Activity has no numeric progress.")
-            return False
-
-        cache = user_data.setdefault("progress_cache", {})
-        old_progress = cache.get(media_id)
-        cache[media_id] = new_progress
-
-        if old_progress is None:
-            self.l.info(f"Initial cache set for media {media_id}.")
-            return True
-
-        if new_progress > old_progress:
-            self.l.info(f"Progress of media {media_id} increased from {old_progress} to {new_progress}.")
-            return True
-
-        self.l.debug(f"No progress increase for media {media_id}. Current: {new_progress}, Previous: {old_progress}.")
-        return False
-
-    def _update_streak(self, user_data: JSON, timestamp: int) -> None:
-        last = user_data.get("last_activity_at", None)
-
-        if not last:
-            user_data["streak"] = 1
-            self.l.info("Streak started for user.")
-
-        else:
-            last_day = last // 86400
-            new_day = timestamp // 86400
-
-            if new_day == last_day:
-                self.l.debug("Activity occurred on the same day. Streak unchanged.")
-                return
-
-            if new_day - last_day == 1:
-                user_data["streak"] += 1
-                self.l.info(f"Streak incremented to {user_data['streak']}.")
-
-            else:
-                user_data["streak"] = 1
-                self.l.info("Streak reset to 1.")
-
-        user_data["last_activity_at"] = timestamp
-        self.l.debug(f"Updated last_activity_at to {timestamp}.")
-
-    async def _fetch_batch_activity(self, usernames: JSON) -> JSON | None:
-        self.l.debug(f"Fetching batch activity for users: {usernames}...")
+        self.l.debug(f'Fetching batch activity for users: "{active_users}"...')
 
         user_parts = []
 
-        for alias, name in usernames.items():
+        for alias, name in active_users.items():
             user_parts.append(f"""
                 {alias}: User(name: "{name}") {{
                     id
@@ -194,17 +194,17 @@ class AniListCog(commands.Cog):
             """)
 
         query = f"query {{ {' '.join(user_parts)} }}"
-        users_data = await self._query_graphql(query)
+        users_data = await self.query_graphql(query)
 
         if not users_data:
-            self.l.warning("No user data returned from AniList API for batch activity.")
-            return None
+            self.l.warning("No user data returned from AniList API for batch activity!")
+            return None, None
 
         id_map = {alias: payload["id"] for alias, payload in users_data.items() if payload}
 
         if not id_map:
-            self.l.warning("No valid user IDs found in AniList API response.")
-            return None
+            self.l.warning("No valid user IDs found in AniList API response!")
+            return None, None
 
         activity_parts = []
 
@@ -235,178 +235,210 @@ class AniListCog(commands.Cog):
         query = f"query {{ {' '.join(activity_parts)} }}"
 
         self.l.debug("Querying AniList API for user activities...")
-        return await self._query_graphql(query)
 
-    async def _run_update_cycle(self) -> None:
-        self.l.info("Starting AniList update cycle...")
+        batch = await self.query_graphql(query)
 
-        data = self._load_data()
+        return batch, alias_map
 
-        if not data["users"]:
-            self.l.info("No users linked for AniList tracking. Skipping update cycle...")
-            return
-
-        channel_id = data.get("channel_id")
-        channel = self.bot.get_channel(channel_id) if channel_id else None
-
-        if not channel or not SimpleUtils.is_messageable(channel):
-            self.l.warning("AniList notification channel is not set or not messageable. Skipping update...")
-            return
-
-        active_users = {}
-        alias_to_discord = {}
-
-        for i, (discord_id, u) in enumerate(data["users"].items()):
-            alias = f"user_{i}"
-            active_users[alias] = u["anilist"]
-            alias_to_discord[alias] = discord_id
-
-        batch = await self._fetch_batch_activity(active_users)
-
-        if not batch:
-            self.l.warning("No activity data returned from AniList API batch query.")
-            return
-
-        for alias, activity in batch.items():
-            if not activity:
-                self.l.debug(f"No activity found for alias {alias}.")
-                continue
-
-            discord_id = alias_to_discord[alias]
-            user_data = data["users"][discord_id]
-            activity_id = activity["id"]
-            last_seen = user_data.get("last_activity_id", None)
-
-            if not user_data.get("synced"):
-                self.l.info(f"Syncing user data for member {discord_id}.")
-                user_data["last_activity_id"] = activity_id
-                user_data["synced"] = True
-
-            if last_seen and activity_id <= last_seen:
-                self.l.debug(f"No new activity for member {discord_id}. Last seen: {last_seen}.")
-                continue
-
-            self.l.info(user_data)
-            self.l.info(activity)
-
-            is_progress = self._is_real_progress(user_data, activity)
-            user_data["last_activity_id"] = activity_id
-
-            if not is_progress:
-                self.l.debug(f"Activity for member {discord_id} is not real progress.")
-                self.l.debug("Skipping streak update and notification...")
-
-                continue
-
-            self._update_streak(user_data, activity["createdAt"])
-
-            embed = Embed(
-                color=Color.ash_theme(),
-                title=activity["media"]["title"]["romaji"],
-                description=(
-                    f"{activity['status'].title()}: **{self._extract_progress(activity)}**\n"
-                    f"Current Streak: **{user_data['streak']}** {'days' if user_data['streak'] != 1 else 'day'}\n\n"
-                    f"[**AniList**](https://anilist.co/anime/{activity['media']['id']}) | "
-                    f"[**MyAnimeList**](https://myanimelist.net/anime/{activity['media']['idMal']})\n\n"
-                    f"<t:{activity['createdAt']}:R>"
-                ),
-            )
-
-            user = await self.bot.fetch_user(int(discord_id))
-
-            embed.set_author(
-                name=f"{activity['user']['name']} (@{user.name})" if user else activity["user"]["name"],
-                url=f"https://anilist.co/user/{activity['user']['id']}",
-                icon_url=activity["user"]["avatar"]["medium"],
-            )
-
-            self.l.info(f"Sending AniList update embed for member {discord_id}...")
-
-            old_message_id = user_data.get("last_message_id")
-
-            if old_message_id:
-                try:
-                    await channel.get_partial_message(old_message_id).delete()
-                    self.l.debug(f"Deleted previous AniList message for {discord_id}.")
-
-                except Exception:
-                    self.l.debug("Previous message already deleted or inaccessible.")
-
-            new_message = await channel.send(embed=embed)
-            user_data["last_message_id"] = new_message.id
-
-        SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
-        self.l.info("AniList update cycle completed and data saved.")
-
-    @tasks.loop(seconds=Config.ANILIST_NORMAL_UPDATE_TIME_SEC)
-    async def _check_updates(self) -> None:
-        self.l.debug("Normal update loop triggered.")
-
-        await self.bot.wait_until_ready()
-        await self._run_update_cycle()
-
-    @tasks.loop(seconds=Config.ANILIST_DEBUG_UPDATE_TIME_SEC)
-    async def _debug_updates(self) -> None:
-        self.l.debug("Debug update loop triggered.")
-
-        await self.bot.wait_until_ready()
-        await self._run_update_cycle()
-
-    @group.command(name="force", description="Manually force an AniList update check for all linked users.")
-    @commands.is_owner()
-    async def anilist_force(self, interaction: Interaction) -> None:
-        self.l.info("Manual AniList update forced by owner.")
-
-        await interaction.response.defer(ephemeral=True)
-        await self._run_update_cycle()
-        await interaction.followup.send("Manual update executed.", ephemeral=True)
-
-    @group.command(name="channel", description="Set the channel where AniList activity updates will be posted.")
-    @commands.is_owner()
-    @app_commands.describe(channel="The text channel that will receive AniList update notifications.")
-    async def anilist_channel(self, interaction: Interaction, channel: TextChannel) -> None:
-        self.l.info(f"Setting AniList notification channel to {channel.id}...")
-
-        data = self._load_data()
-        data["channel_id"] = channel.id
-
-        SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
-        self.l.info(f"AniList notification channel set to {channel.id} and saved.")
-
-        await interaction.response.send_message(
-            f"Set {channel.mention} as AniList notification channel.",
-            ephemeral=True,
-        )
-
-    @group.command(name="link", description="Link a Discord user to their AniList account for activity tracking.")
-    @commands.is_owner()
-    @app_commands.describe(
-        member="The Discord member whose AniList account will be linked.",
-        username="The AniList username to track (case-sensitive).",
-    )
-    async def anilist_link(self, interaction: Interaction, member: Member, username: str) -> None:
-        self.l.info(f"Linking Discord user {member.id} to AniList username '{username}'.")
-
-        await interaction.response.defer(ephemeral=True)
-
-        data = self._load_data()
-        data["users"][str(member.id)] = {
-            "anilist": username,
-            "last_activity_at": None,
-            "last_activity_id": None,
-            "last_message_id": None,
-            "progress_cache": {},
-            "streak": 0,
-            "synced": False,
+    async def query_graphql(self, query: str, variables: T_DATA | None = None) -> T_DATA | None:
+        payload = {
+            "url": "https://graphql.anilist.co",
+            "json": {
+                "query": query,
+                "variables": variables or {},
+            },
         }
 
-        SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
-        self.l.info(f"Linked Discord user {member.id} to AniList username '{username}' and saved.")
+        if not variables:
+            self.l.debug("Sending GraphQL query to AniList API with no variables.")
+        else:
+            self.l.debug(f'Sending GraphQL query to AniList API with variables: "{variables}"...')
 
-        await interaction.followup.send(
-            f"Linked {member.mention} to [{username}](<https://anilist.co/user/{username}>).",
-            ephemeral=True,
+        try:
+            async with self.session.post(**payload) as response:
+                ok = 200
+
+                if response.status != ok:
+                    text = await response.text()
+                    self.l.error(f"AniList API Error {response.status}: {text}")
+                    return None
+
+                data = await response.json()
+
+                if "errors" in data:
+                    self.l.error(f"AniList GraphQL Error: {data['errors']}")
+                    return None
+
+                self.l.info("Retrieved data from AniList.")
+                return data.get("data")
+
+        except Exception:
+            self.l.exception("AniList API Exception!")
+            return None
+
+    async def process_activity(self, channel: T_CHANNEL, discord_id: T_NUMERIC, user_data: T_DATA, activity: T_DATA) -> bool:
+        activity_id = activity["id"]
+        last_seen = user_data.get("last_activity_id")
+
+        if not user_data.get("synced"):
+            self.l.info(f"Syncing user data for member {discord_id}.")
+            user_data.update({
+                "last_activity_id": activity_id,
+                "synced": True,
+            })
+
+            return False
+
+        if last_seen and activity_id <= last_seen:
+            self.l.debug(f"No new activity for member {discord_id}.")
+            return False
+
+        user_data["last_activity_id"] = activity_id
+
+        if not self.is_real_progress(user_data, activity):
+            self.l.debug(f"Activity for {discord_id} is not real progress.")
+            return False
+
+        self.update_streak(user_data, activity["createdAt"])
+
+        embed = await self.build_embed(discord_id, user_data, activity)
+        await self.send_update(channel, user_data, embed)
+
+        return True
+
+    def is_real_progress(self, user_data: T_DATA, activity: T_DATA) -> bool:
+        if not self.is_consumption_activity(activity):
+            self.l.debug("Activity is not a consumption activity. Skipping progress check...")
+            return False
+
+        media_id = str(activity["media"]["id"])
+        new_progress = self.extract_progress(activity)
+
+        if new_progress is None:
+            self.l.info("Activity has no numeric progress.")
+            return False
+
+        cache = user_data.setdefault("progress_cache", {})
+        old_progress = cache.get(media_id)
+        cache[media_id] = new_progress
+
+        if old_progress is None:
+            self.l.info(f"Initial cache set for media {media_id}.")
+            return True
+
+        if new_progress > old_progress:
+            self.l.info(f"Progress of media {media_id} increased from {old_progress} to {new_progress}.")
+            return True
+
+        self.l.debug(f"No progress increase for media {media_id}. Current: {new_progress}, Previous: {old_progress}.")
+        return False
+
+    def update_streak(self, user_data: T_DATA, timestamp: int) -> None:
+        last = user_data.get("last_activity_at", None)
+
+        if not last:
+            user_data["streak"] = 1
+            self.l.info("New streak started for user.")
+
+        else:
+            last_day = last // 86400
+            new_day = timestamp // 86400
+
+            if new_day == last_day:
+                self.l.debug("Activity occurred on the same day. Streak is not changed.")
+                return
+
+            if new_day - last_day == 1:
+                user_data["streak"] += 1
+                self.l.info(f"Streak incremented to {user_data['streak']}.")
+
+            else:
+                user_data["streak"] = 1
+                self.l.info("Streak reset to 1.")
+
+        user_data["last_activity_at"] = timestamp
+        self.l.debug(f'Updated "last_activity_at" to {timestamp}.')
+
+    async def build_embed(self, discord_id: T_NUMERIC, user_data: T_DATA, activity: T_DATA) -> Embed:
+        embed = Embed(
+            color=Color.ash_theme(),
+            title=activity["media"]["title"]["romaji"],
+            description=(
+                f"{activity['status'].title()}: **{self.extract_progress(activity)}**\n"
+                f"Current Streak: **{user_data['streak']}** "
+                f"{'days' if user_data['streak'] != 1 else 'day'}\n\n"
+                f"[**AniList**](https://anilist.co/anime/{activity['media']['id']}) | "
+                f"[**MyAnimeList**](https://myanimelist.net/anime/{activity['media']['idMal']})\n\n"
+                f"<t:{activity['createdAt']}:R>"
+            ),
         )
+
+        user = await self.bot.fetch_user(int(discord_id))
+
+        embed.set_author(
+            name=f"{activity['user']['name']} (@{user.name})" if user else activity["user"]["name"],
+            url=f"https://anilist.co/user/{activity['user']['id']}",
+            icon_url=activity["user"]["avatar"]["medium"],
+        )
+
+        return embed
+
+    async def send_update(self, channel: T_CHANNEL, user_data: T_DATA, embed: Embed) -> None:
+        old_message_id = user_data.get("last_message_id")
+
+        if not channel or not SimpleUtils.is_guild_messageable(channel):
+            self.l.warning("An invalid channel was supplied!")
+            return
+
+        if old_message_id:
+            with contextlib.suppress(Exception):
+                if isinstance(channel, (TextChannel, Thread)):
+                    await channel.get_partial_message(old_message_id).delete()
+
+        message = await channel.send(embed=embed)
+        user_data["last_message_id"] = message.id
+
+    def is_consumption_activity(self, activity: T_DATA) -> bool:
+        status = (activity.get("status") or "").lower()
+        valid_prefixes = (
+            "completed",
+            "paused",
+            "dropped",
+            "watched",
+            "rewatched",
+            "read",
+            "reread",
+        )
+
+        if not status.startswith(valid_prefixes):
+            self.l.info(f'Ignoring non-consumption activity: "{status}".')
+            return False
+
+        self.l.debug(f'Activity "{status}" is a valid consumption activity.')
+        return True
+
+    def extract_progress(self, activity: T_DATA) -> int | None:
+        raw = activity.get("progress")
+
+        if raw is None:
+            self.l.debug("No progress field found in activity.")
+            return None
+
+        try:
+            text = str(raw).strip()
+
+            if "-" in text:
+                text = text.split("-")[-1].strip()
+
+            progress = int(text)
+            self.l.debug(f"Extracted progress value of {progress}.")
+
+        except (ValueError, TypeError):
+            self.l.warning(f'Failed to extract numeric progress from raw value "{raw}"!')
+            return None
+
+        else:
+            return progress
 
 
 async def setup(bot: commands.Bot) -> None:

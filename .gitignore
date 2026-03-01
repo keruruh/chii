@@ -1,8 +1,6 @@
-data/
-
-.vscode/
-.venv/
 .env
+.venv/
+data/
 
 __pycache__/
 *.py[codz]

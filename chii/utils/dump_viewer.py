@@ -2,9 +2,11 @@ import pathlib
 
 from discord import ButtonStyle, Interaction, ui
 
+from chii.utils import T_NUMERIC
+
 
 class DumpViewer(ui.View):
-    def __init__(self, file_path: pathlib.Path, pages: list[str], owner_id: int) -> None:
+    def __init__(self, file_path: pathlib.Path, pages: list[str], owner_id: T_NUMERIC) -> None:
         super().__init__(timeout=300)
 
         self.file_path = file_path
@@ -12,9 +14,6 @@ class DumpViewer(ui.View):
         self.owner_id = owner_id
 
         self.index = 0
-
-    async def interaction_check(self, interaction: Interaction) -> bool:
-        return interaction.user.id == self.owner_id
 
     def get_content(self) -> str:
         return (
@@ -24,6 +23,9 @@ class DumpViewer(ui.View):
             "```\n"
             f"-# Page **{self.index + 1}** of **{len(self.pages)}**"
         )
+
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        return interaction.user.id == self.owner_id
 
     @ui.button(label="Previous", style=ButtonStyle.secondary)
     async def previous_page(self, interaction: Interaction, _button: ui.Button) -> None:
@@ -42,3 +44,11 @@ class DumpViewer(ui.View):
             self.index += 1
 
         await interaction.response.edit_message(content=self.get_content(), view=self)
+
+    @ui.button(label="Delete", style=ButtonStyle.danger)
+    async def delete_message(self, interaction: Interaction, _button: ui.Button) -> None:
+        await interaction.response.defer()
+        message = interaction.message or await interaction.original_response()
+        await message.delete()
+
+        self.stop()

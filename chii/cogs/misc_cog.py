@@ -1,7 +1,7 @@
 import logging
 import typing as t
 
-from discord import Activity, ActivityType, Game, Interaction, app_commands
+from discord import Activity, ActivityType, Interaction, app_commands
 from discord.ext import commands
 
 from chii.config import Config
@@ -18,8 +18,8 @@ class MiscCog(commands.Cog):
         self.l.info("MiscCog initialized.")
 
     @group.command(name="dump", description="Dump a data file with scrolling pagination.")
+    @app_commands.describe(filename="File inside the data path.", reverse="Read file from the bottom (useful for logs).")
     @commands.is_owner()
-    @app_commands.describe(filename="File inside the data path.", reverse="Read file from bottom (useful for logs).")
     async def dump_file(self: t.Self, interaction: Interaction, filename: str, reverse: bool = False) -> None:
         self.l.info(f"{interaction.user} requested dump of {filename}")
 
@@ -43,7 +43,7 @@ class MiscCog(commands.Cog):
             text = "".join(lines)
 
         except Exception:
-            self.l.exception("Failed reading dump file.")
+            self.l.exception("Failed while reading dump file!")
             await interaction.response.send_message("Failed to read file. See logs for more info.", ephemeral=True)
             return
 
@@ -59,6 +59,7 @@ class MiscCog(commands.Cog):
 
     @group.command(name="status", description="Change the bot status")
     @app_commands.describe(activity_type="Type of activity (playing, watching, listening, streaming).", text="Status.")
+    @commands.is_owner()
     async def change_status(self: t.Self, interaction: Interaction, activity_type: str, text: str) -> None:
         activity_type = activity_type.lower()
 
@@ -77,6 +78,7 @@ class MiscCog(commands.Cog):
 
         await self.bot.change_presence(activity=activity)
         await interaction.response.send_message(f'Status changed to: "{activity_type.title()}" **{text}**.')
+
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(MiscCog(bot))

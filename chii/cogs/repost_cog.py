@@ -7,7 +7,8 @@ from discord import Interaction, Message, TextChannel, app_commands
 from discord.ext import commands
 
 from chii.config import Config
-from chii.utils import JSON, SimpleUtils
+from chii.main import video_worker
+from chii.utils import T_DATA, SimpleUtils
 
 
 class RepostCog(commands.Cog):
@@ -20,7 +21,7 @@ class RepostCog(commands.Cog):
 
         self.l.info("RepostCog initialized.")
 
-    def _load_data(self) -> JSON:
+    def _load_data(self) -> T_DATA:
         default_data = {
             "channel_ids": [],
         }
@@ -37,7 +38,7 @@ class RepostCog(commands.Cog):
             data = json.load(f)
 
         if "channel_ids" not in data:
-            self.l.warning("The 'channel_ids' key missing in reposts data. Initializing as empty list...")
+            self.l.warning('The "channel_ids" key missing in reposts data! Initializing as empty list...')
             data["channel_ids"] = []
 
         return data
@@ -60,7 +61,7 @@ class RepostCog(commands.Cog):
 
         self.l.info(f"Detected repost URL in channel {message.channel.id} by user {message.author.id}.")
 
-        await self.bot.video_worker.enqueue({
+        await video_worker.enqueue({
             "message": message,
             "url": match.group(1),
         })

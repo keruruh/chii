@@ -1,5 +1,5 @@
 indent-width = 4
-line-length = 120
+line-length = 150
 
 preview = true
 
@@ -21,6 +21,7 @@ select = [
 
 ignore = [
     "ANN401",
+    "ASYNC240",
 
     "BLE001",
 
