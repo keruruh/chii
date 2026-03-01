@@ -89,16 +89,13 @@ class AniListCog(commands.Cog):
         SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
         self.l.info(f"AniList notification channel set to {channel.id} and saved.")
 
-        await interaction.response.send_message(
-            f"Set {channel.mention} as AniList notification channel.",
-            ephemeral=True,
-        )
+        await interaction.response.send_message(f"Set {channel.mention} as AniList notification channel.", ephemeral=True)
 
     @group.command(name="link", description="Link a Discord user to their AniList account for activity tracking.")
     @app_commands.describe(member="The Discord member whose AniList account will be linked.", username="The AniList username to track.")
     @commands.is_owner()
     async def anilist_link(self, interaction: Interaction, member: Member, username: str) -> None:
-        self.l.info(f"Linking Discord user {member.id} to AniList username '{username}'.")
+        self.l.info(f'Linking Discord user {member.id} to AniList username "{username}".')
 
         await interaction.response.defer(ephemeral=True)
 
@@ -114,12 +111,9 @@ class AniListCog(commands.Cog):
         }
 
         SimpleUtils.save_data(Config.ANILIST_DATA_PATH, data)
-        self.l.info(f"Linked Discord user {member.id} to AniList username '{username}' and saved.")
+        self.l.info(f'Linked Discord user {member.id} to AniList username "{username}" and saved.')
 
-        await interaction.followup.send(
-            f"Linked {member.mention} to [{username}](<https://anilist.co/user/{username}>).",
-            ephemeral=True,
-        )
+        await interaction.followup.send(f"Linked {member.mention} to [{username}](<https://anilist.co/user/{username}>).", ephemeral=True)
 
     async def run_update_cycle(self) -> None:
         self.l.info("Starting AniList update cycle...")
@@ -166,7 +160,7 @@ class AniListCog(commands.Cog):
 
         channel = self.bot.get_channel(channel_id)
 
-        if not channel or not SimpleUtils.is_guild_messageable(channel):
+        if not channel or not SimpleUtils.is_messageable(channel):
             self.l.warning("Notification channel is not messageable!")
             return None
 
@@ -270,7 +264,7 @@ class AniListCog(commands.Cog):
                     return None
 
                 self.l.info("Retrieved data from AniList.")
-                return data.get("data")
+                return data["data"]
 
         except Exception:
             self.l.exception("AniList API Exception!")
@@ -278,14 +272,12 @@ class AniListCog(commands.Cog):
 
     async def process_activity(self, channel: T_CHANNEL, discord_id: T_NUMERIC, user_data: T_DATA, activity: T_DATA) -> bool:
         activity_id = activity["id"]
-        last_seen = user_data.get("last_activity_id")
+        last_seen = user_data["last_activity_id"]
+        synced = user_data["synced"]
 
-        if not user_data.get("synced"):
+        if not synced:
             self.l.info(f"Syncing user data for member {discord_id}.")
-            user_data.update({
-                "last_activity_id": activity_id,
-                "synced": True,
-            })
+            user_data.update({"last_activity_id": activity_id, "synced": True})
 
             return False
 
@@ -314,15 +306,15 @@ class AniListCog(commands.Cog):
         media_id = str(activity["media"]["id"])
         new_progress = self.extract_progress(activity)
 
-        if new_progress is None:
+        if not new_progress:
             self.l.info("Activity has no numeric progress.")
             return False
 
         cache = user_data.setdefault("progress_cache", {})
-        old_progress = cache.get(media_id)
+        old_progress = cache[media_id]
         cache[media_id] = new_progress
 
-        if old_progress is None:
+        if not old_progress:
             self.l.info(f"Initial cache set for media {media_id}.")
             return True
 
@@ -334,7 +326,7 @@ class AniListCog(commands.Cog):
         return False
 
     def update_streak(self, user_data: T_DATA, timestamp: int) -> None:
-        last = user_data.get("last_activity_at", None)
+        last = user_data["last_activity_at"]
 
         if not last:
             user_data["streak"] = 1
@@ -384,9 +376,9 @@ class AniListCog(commands.Cog):
         return embed
 
     async def send_update(self, channel: T_CHANNEL, user_data: T_DATA, embed: Embed) -> None:
-        old_message_id = user_data.get("last_message_id")
+        old_message_id = user_data["last_message_id"]
 
-        if not channel or not SimpleUtils.is_guild_messageable(channel):
+        if not channel or not SimpleUtils.is_messageable(channel):
             self.l.warning("An invalid channel was supplied!")
             return
 
@@ -399,7 +391,7 @@ class AniListCog(commands.Cog):
         user_data["last_message_id"] = message.id
 
     def is_consumption_activity(self, activity: T_DATA) -> bool:
-        status = (activity.get("status") or "").lower()
+        status = (activity.get("status", "")).lower()
         valid_prefixes = (
             "completed",
             "paused",
@@ -418,9 +410,9 @@ class AniListCog(commands.Cog):
         return True
 
     def extract_progress(self, activity: T_DATA) -> int | None:
-        raw = activity.get("progress")
+        raw = activity["progress"]
 
-        if raw is None:
+        if not raw:
             self.l.debug("No progress field found in activity.")
             return None
 

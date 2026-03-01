@@ -21,8 +21,12 @@ class SimpleUtils:
             cls.l.exception("Failed saving reminders.")
 
     @staticmethod
-    def is_guild_messageable(channel: t.Any, /) -> t.TypeGuard[Messageable]:
-        return isinstance(channel, GuildChannel) and isinstance(channel, Messageable)
+    def is_guild_channel(channel: t.Any, /) -> t.TypeGuard[GuildChannel]:
+        return isinstance(channel, GuildChannel)
+
+    @staticmethod
+    def is_messageable(channel: t.Any, /) -> t.TypeGuard[Messageable]:
+        return isinstance(channel, Messageable)
 
     @staticmethod
     def paginate_text(text: str, /) -> list[str]:

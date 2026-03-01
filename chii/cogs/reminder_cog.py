@@ -7,7 +7,6 @@ import typing as t
 import uuid
 
 from discord import Interaction, app_commands
-from discord.abc import GuildChannel, Messageable
 from discord.ext import commands
 
 from chii.config import Config
@@ -70,10 +69,7 @@ class ReminderCog(commands.Cog):
 
         if seconds < Config.REMINDERS_MIN_TIME_SEC:
             self.l.warning("Reminder time below minimum allowed!")
-            await interaction.response.send_message(
-                "Your must set your reminder to at least 10 seconds.",
-                ephemeral=True,
-            )
+            await interaction.response.send_message("Your must set your reminder to at least 10 seconds.", ephemeral=True)
 
             return
 
@@ -82,8 +78,8 @@ class ReminderCog(commands.Cog):
             await interaction.response.send_message("Your message must not exceed 100 characters.", ephemeral=True)
             return
 
-        if not interaction.channel or not isinstance(interaction.channel, (Messageable, GuildChannel)):
-            self.l.error("Interaction channel was not found or is not messageable.")
+        if not interaction.channel or not SimpleUtils.is_guild_channel(interaction.channel):
+            self.l.error("Interaction channel was not found or is not a guild channel.")
             return
 
         trigger = int(time.time() + seconds)
@@ -129,7 +125,7 @@ class ReminderCog(commands.Cog):
     async def reminder_cancel(self: t.Self, interaction: Interaction, reminder_id: int) -> None:
         self.l.info(f"Received reminder cancel command for reminder {reminder_id} from user {interaction.user.id}.")
 
-        reminder = self.reminders.get(reminder_id)
+        reminder = self.reminders[reminder_id]
 
         if not reminder or reminder["user_id"] != interaction.user.id:
             self.l.warning(f"Reminder {reminder_id} not found or not owned by user {interaction.user.id}!")
@@ -155,7 +151,7 @@ class ReminderCog(commands.Cog):
     async def reminder_edit(self: t.Self, interaction: Interaction, reminder_id: int, new_message: str) -> None:
         self.l.info(f"Received reminder edit command for reminder {reminder_id} from user {interaction.user.id}.")
 
-        reminder = self.reminders.get(reminder_id)
+        reminder = self.reminders[reminder_id]
 
         if not reminder or reminder["user_id"] != interaction.user.id:
             self.l.warning(f"Reminder {reminder_id} not found or not owned by user {interaction.user.id}!")
@@ -197,7 +193,7 @@ class ReminderCog(commands.Cog):
     async def _worker_task(self: t.Self, reminder_id: T_NUMERIC) -> None:
         self.l.info(f"Reminder worker started for reminder {reminder_id}.")
 
-        reminder = self.reminders.get(reminder_id)
+        reminder = self.reminders[reminder_id]
 
         if not reminder:
             self.l.warning(f"Reminder {reminder_id} not found! Stopping worker...")
@@ -211,7 +207,7 @@ class ReminderCog(commands.Cog):
 
         channel = self.bot.get_channel(reminder["channel_id"])
 
-        if channel is None:
+        if not channel:
             self.l.debug(f"Channel {reminder['channel_id']} was not found in cache. Attempting to fetch...")
 
             try:
@@ -223,7 +219,7 @@ class ReminderCog(commands.Cog):
         try:
             message = f'<@{reminder["user_id"]}>\n-# Message: "**{reminder["message"] or "None"}**"\n-# Reminder ID: **{reminder["id"]}**'
 
-            if not SimpleUtils.is_guild_messageable(channel):
+            if not SimpleUtils.is_messageable(channel):
                 self.l.warning(f"Channel {channel.id} is not messageable!")
                 return
 

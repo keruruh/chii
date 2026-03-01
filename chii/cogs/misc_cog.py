@@ -77,7 +77,7 @@ class MiscCog(commands.Cog):
                 return
 
         await self.bot.change_presence(activity=activity)
-        await interaction.response.send_message(f'Status changed to: "{activity_type.title()}" **{text}**.')
+        await interaction.response.send_message(f"Status changed to: {activity_type.title()} **{text}**.")
 
 
 async def setup(bot: commands.Bot) -> None:

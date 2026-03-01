@@ -25,7 +25,7 @@ video_worker = VideoWorker(bot=bot, worker_count=3, max_queue_size=5)
 
 @bot.event
 async def on_ready() -> None:
-    if bot.user is not None:
+    if bot.user:
         l.info(f"Logged in as {bot.user} ({bot.user.id}).")
     else:
         l.error("Could not get bot user.")
