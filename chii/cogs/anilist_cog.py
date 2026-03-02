@@ -1,4 +1,5 @@
 import contextlib
+import enum
 import json
 import logging
 import pathlib
@@ -9,6 +10,16 @@ from discord.ext import commands, tasks
 
 from chii.config import Config
 from chii.utils import T_CHANNEL, T_DATA, T_NUMERIC, SimpleUtils
+
+
+class Activity(enum.Enum):
+    COMPLETED = "Completed"
+    PAUSED = "Paused"
+    DROPPED = "Dropped"
+    WATCHED = "Watched"
+    REWATCHED = "Rewatched"
+    READ = "Read"
+    REREAD = "Reread"
 
 
 class AniListCog(commands.Cog):
@@ -259,7 +270,7 @@ class AniListCog(commands.Cog):
                 data = await response.json()
 
                 if "errors" in data:
-                    self.l.error(f"AniList GraphQL Error: {data['errors']}")
+                    self.l.error(f'AniList GraphQL Error: {data["errors"]}')
                     return None
 
                 self.l.info("Retrieved data from AniList.")
@@ -305,6 +316,12 @@ class AniListCog(commands.Cog):
         new_progress = self.extract_progress(activity)
 
         if not new_progress:
+            status = self.extract_status(activity)
+
+            if status and status in {Activity.COMPLETED, Activity.DROPPED, Activity.PAUSED}:
+                self.l.info("Activity has no numeric progress but it is supported.")
+                return True
+
             self.l.info("Activity has no numeric progress.")
             return False
 
@@ -340,7 +357,7 @@ class AniListCog(commands.Cog):
 
             if new_day - last_day == 1:
                 user_data["streak"] += 1
-                self.l.info(f"Streak incremented to {user_data['streak']}.")
+                self.l.info(f'Streak incremented to {user_data["streak"]}.')
 
             else:
                 user_data["streak"] = 1
@@ -351,36 +368,36 @@ class AniListCog(commands.Cog):
 
     async def build_embed(self, discord_id: T_NUMERIC, user_data: T_DATA, activity: T_DATA) -> Embed:
         title = activity["media"]["title"]["romaji"]
-        status = activity["status"].title()
-        progress = self.extract_progress(activity)
-        streak_suffix = "days" if user_data["streak"] != 1 else "day"
+        status = self.extract_status(activity)
+        progress = None
 
-        match status:
-            case "Completed":
-                color = Color.green()
-            case "Paused":
-                color = Color.orange()
-            case "Dropped":
-                color = Color.red()
-            case _:
-                color = Color.ash_theme()
+        status_color_map = {
+            Activity.COMPLETED: Color.green(),
+            Activity.DROPPED: Color.orange(),
+            Activity.PAUSED: Color.red(),
+        }
 
-        embed = Embed(
-            color=color,
-            title=title,
-            description=(
-                f"{status}: **{progress}**\n"
-                f"Current Streak: **{user_data['streak']}** {streak_suffix}\n\n"
-                f"[**AniList**](https://anilist.co/anime/{activity['media']['id']}) | "
-                f"[**MyAnimeList**](https://myanimelist.net/anime/{activity['media']['idMal']})\n\n"
-                f"<t:{activity['createdAt']}:R>"
-            ),
-        )
+        if status in status_color_map:
+            title = f"{status.value} {title}"
+            color = status_color_map[status]
+        else:
+            progress = self.extract_progress(activity)
+            color = Color.ash_theme()
+
+        parts = [
+            f'{(status.value if status else "Unknown")}: **{progress}**\n' if progress else None,
+            f'Current Streak: **{user_data["streak"]}** {"day" if user_data["streak"] == 1 else 'days'}\n\n',
+            f'[**AniList**](https://anilist.co/anime/{activity["media"]["id"]}) | ',
+            f'[**MyAnimeList**](https://myanimelist.net/anime/{activity["media"]["idMal"]})\n\n',
+            f'<t:{activity["createdAt"]}:R>',
+        ]
+
+        embed = Embed(color=color, title=title, description="".join(p for p in parts if p))
 
         user = await self.bot.fetch_user(int(discord_id))
 
-        author_name = f"{activity['user']['name']} (@{user.name})" if user else activity["user"]["name"]
-        author_url = f"https://anilist.co/user/{activity['user']['id']}"
+        author_name = f'{activity["user"]["name"]} (@{user.name})' if user else activity["user"]["name"]
+        author_url = f'https://anilist.co/user/{activity["user"]["id"]}'
         author_icon = activity["user"]["avatar"]["medium"]
 
         embed.set_author(name=author_name, url=author_url, icon_url=author_icon)
@@ -403,23 +420,23 @@ class AniListCog(commands.Cog):
         user_data["last_message_id"] = message.id
 
     def is_consumption_activity(self, activity: T_DATA) -> bool:
-        status = (activity.get("status", "")).lower()
-        valid_prefixes = (
-            "completed",
-            "paused",
-            "dropped",
-            "watched",
-            "rewatched",
-            "read",
-            "reread",
-        )
+        status = self.extract_status(activity)
 
-        if not status.startswith(valid_prefixes):
+        if not status:
             self.l.info(f'Ignoring non-consumption activity: "{status}".')
             return False
 
         self.l.debug(f'Activity "{status}" is a valid consumption activity.')
         return True
+
+    def extract_status(self, activity: T_DATA) -> Activity | None:
+        status = activity.get("status", "")
+
+        try:
+            return Activity(status)
+        except ValueError:
+            self.l.warning(f'Unsupported status "{status}" found!')
+            return None
 
     def extract_progress(self, activity: T_DATA) -> int | None:
         raw = activity["progress"]
