@@ -291,6 +291,8 @@ class AniListCog(LogSubclass, commands.Cog):
 
             return False
 
+        self.log.debug(f"Activity ID: {activity_id}, Last Seen: {last_seen}")
+
         if last_seen and activity_id <= last_seen:
             self.log.debug(f"No new activity for member {discord_id} (ID).")
             return False
@@ -386,7 +388,7 @@ class AniListCog(LogSubclass, commands.Cog):
             color = Color.ash_theme()
 
         parts = [
-            f'{(_Status.value if status else "Unknown")}: **{progress}**\n' if progress else None,
+            f'{(status.value if status else "Unknown")}: **{progress}**\n' if progress else None,
             f'Current Streak: **{user_data["streak"]}** {"day" if user_data["streak"] == 1 else 'days'}\n\n',
             f'[**AniList**](https://anilist.co/anime/{activity["media"]["id"]}) | ',
             f'[**MyAnimeList**](https://myanimelist.net/anime/{activity["media"]["idMal"]})\n\n',
@@ -424,14 +426,14 @@ class AniListCog(LogSubclass, commands.Cog):
         status = self.extract_status(activity)
 
         if not status:
-            self.log.info(f'Ignoring non-consumption activity: "{status}".')
+            self.log.info("Ignoring non-consumption activity.")
             return False
 
         self.log.debug(f'Activity "{status}" is a valid consumption activity.')
         return True
 
     def extract_status(self: t.Self, activity: T_DATA) -> _Status | None:
-        status = activity.get("status", "").capitalize()
+        status = activity.get("status", "_").split()[0].capitalize()
 
         try:
             return _Status(status)
