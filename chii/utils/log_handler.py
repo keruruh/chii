@@ -1,7 +1,15 @@
 import logging
+import typing as t
 from logging.handlers import RotatingFileHandler
 
 from chii.config import Config
+
+
+class LogSubclass:
+    def __init_subclass__(cls, **kwargs: t.Any) -> None:
+        super().__init_subclass__(**kwargs)
+
+        cls.log = logging.getLogger(f"{cls.__module__}.{cls.__qualname__}")
 
 
 class LogHandler:

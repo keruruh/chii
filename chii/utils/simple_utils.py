@@ -1,16 +1,13 @@
 import json
-import logging
 import pathlib
 import typing as t
 
 from discord.abc import GuildChannel, Messageable
 
-from chii.utils import T_DATA
+from chii.utils import T_DATA, LogSubclass
 
 
-class SimpleUtils:
-    l = logging.getLogger(f"chii.utils.{__qualname__}")
-
+class SimpleUtils(LogSubclass):
     @classmethod
     def save_data(cls, path: pathlib.Path, data: T_DATA | list[t.Any]) -> None:
         try:
@@ -18,7 +15,7 @@ class SimpleUtils:
                 json.dump(data, f, indent=4)
 
         except Exception:
-            cls.l.exception("Failed saving reminders.")
+            cls.log.exception("Failed saving reminders.")
 
     @staticmethod
     def is_guild_channel(channel: t.Any, /) -> t.TypeGuard[GuildChannel]:

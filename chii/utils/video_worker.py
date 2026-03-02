@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import pathlib
 import subprocess
 import typing as t
@@ -10,7 +9,7 @@ from discord import File, Message
 from discord.ext import commands
 
 from chii.config import Config
-from chii.utils import T_NUMERIC
+from chii.utils import T_NUMERIC, LogSubclass
 
 
 class _YTDLogger:
@@ -29,9 +28,7 @@ class _VideoJob(t.TypedDict):
     url: str
 
 
-class VideoWorker:
-    l = logging.getLogger(f"chii.utils.{__qualname__}")
-
+class VideoWorker(LogSubclass):
     def __init__(self: t.Self, bot: commands.Bot, worker_count: int, max_queue_size: int) -> None:
         self.bot = bot
 
@@ -40,43 +37,43 @@ class VideoWorker:
         self.active_urls = set()
         self.tasks = []
 
-        self.l.info(f"VideoWorker initialized with {worker_count} workers and a max queue size of {max_queue_size}.")
+        self.log.info(f"VideoWorker initialized with {worker_count} workers and a max queue size of {max_queue_size}.")
 
     def start(self) -> None:
-        self.l.info("Starting video worker threads...")
+        self.log.info("Starting video worker threads...")
 
         for i in range(self.worker_count):
             self.tasks.append(asyncio.create_task(self._worker_loop(i)))
 
-        self.l.info(f"Started {self.worker_count} video workers.")
+        self.log.info(f"Started {self.worker_count} video workers.")
 
     async def stop(self) -> None:
-        self.l.info("Stopping all video worker tasks...")
+        self.log.info("Stopping all video worker tasks...")
 
         for task in self.tasks:
             task.cancel()
 
         await asyncio.gather(*self.tasks, return_exceptions=True)
-        self.l.info("All video worker tasks stopped.")
+        self.log.info("All video worker tasks stopped.")
 
     async def enqueue(self: t.Self, job: _VideoJob) -> None:
         url = job["url"]
 
         if url in self.active_urls:
-            self.l.info(f'The URL "{url}" is already in queue. Skipping...')
+            self.log.info(f'The URL "{url}" is already in queue. Skipping...')
             return
 
         if self.queue.full():
-            self.l.warning("Queue is full! Skipping job...")
+            self.log.warning("Queue is full! Skipping job...")
             return
 
         self.active_urls.add(url)
-        self.l.info(f'Enqueued job for URL "{url}". Queue size is now {self.queue.qsize()}.')
+        self.log.info(f'Enqueued job for URL "{url}". Queue size is now {self.queue.qsize()}.')
 
         await self.queue.put(job)
 
     def _download_video(self: t.Self, url: str) -> pathlib.Path | None:
-        self.l.info(f'Starting download for video URL "{url}"...')
+        self.log.info(f'Starting download for video URL "{url}"...')
 
         Config.TEMP_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -98,20 +95,20 @@ class VideoWorker:
             with yt_dlp.YoutubeDL(**options) as yt:
                 yt.download([url])
 
-            self.l.info(f'Downloaded video from "{url}" to "{output}".')
+            self.log.info(f'Downloaded video from "{url}" to "{output}".')
 
         except Exception:
-            self.l.exception(f'Failed to download video from "{url}"!')
+            self.log.exception(f'Failed to download video from "{url}"!')
             return None
 
         if not output.exists():
-            self.l.error(f'Download completed but output file "{output}" does not exist.')
+            self.log.error(f'Download completed but output file "{output}" does not exist.')
             return None
 
         return output
 
     def _get_duration(self: t.Self, path: pathlib.Path) -> float:
-        self.l.debug(f"Getting duration for file {path}...")
+        self.log.debug(f"Getting duration for file {path}...")
 
         # fmt: off
         command = [
@@ -127,37 +124,37 @@ class VideoWorker:
 
         try:
             duration = float(result.stdout.strip())
-            self.l.info(f'Got duration {duration}s for file "{path}".')
+            self.log.info(f'Got duration {duration}s for file "{path}".')
 
         except Exception:
-            self.l.exception(f'Failed to get duration for "{path}"!')
+            self.log.exception(f'Failed to get duration for "{path}"!')
             raise
 
         else:
             return duration
 
     async def _worker_loop(self: t.Self, worker_id: T_NUMERIC) -> None:
-        self.l.info(f"[Video Worker {worker_id}]: Ready.")
+        self.log.info(f"[Video Worker {worker_id}]: Ready.")
 
         while True:
             job = await self.queue.get()
 
-            self.l.debug(f'[Video Worker {worker_id}]: Picked up job for URL {job["url"]} from queue.')
+            self.log.debug(f'[Video Worker {worker_id}]: Picked up job for URL {job["url"]} from queue.')
 
             try:
                 await self._process_job(job, worker_id)
             except Exception:
-                self.l.exception(f"[Video Worker {worker_id}]: Unexpected exception while processinrg job!")
+                self.log.exception(f"[Video Worker {worker_id}]: Unexpected exception while processinrg job!")
             finally:
                 self.active_urls.discard(job["url"])
-                self.l.debug(f'[Video Worker {worker_id}]: Job for URL {job["url"]} completed and removed from queue.')
+                self.log.debug(f'[Video Worker {worker_id}]: Job for URL {job["url"]} completed and removed from queue.')
                 self.queue.task_done()
 
     async def _process_job(self: t.Self, job: _VideoJob, worker_id: T_NUMERIC) -> None:
         message = job["message"]
         url = job["url"]
 
-        self.l.info(f'[Video Worker {worker_id}]: Processing job for URL "{url}"...')
+        self.log.info(f'[Video Worker {worker_id}]: Processing job for URL "{url}"...')
 
         async with message.channel.typing():
             loop = asyncio.get_running_loop()
@@ -165,16 +162,16 @@ class VideoWorker:
             video = await loop.run_in_executor(None, self._download_video, url)
 
             if not video:
-                self.l.error(f'[Video Worker {worker_id}]: Failed to download video from URL "{url}".')
+                self.log.error(f'[Video Worker {worker_id}]: Failed to download video from URL "{url}".')
                 return
 
             compressed = await loop.run_in_executor(None, self._compress_to_limit, video)
 
             video.unlink(missing_ok=True)
-            self.l.info(f"[Video Worker {worker_id}]: Removed original video file {video}.")
+            self.log.info(f"[Video Worker {worker_id}]: Removed original video file {video}.")
 
             if not compressed:
-                self.l.error(f'[Video Worker {worker_id}]: Failed to compress video from URL "{url}".')
+                self.log.error(f'[Video Worker {worker_id}]: Failed to compress video from URL "{url}".')
                 return
 
         user_text = message.content.replace(url, "").strip()
@@ -186,19 +183,19 @@ class VideoWorker:
 
         try:
             await message.delete()
-            self.l.info(f"[Video Worker {worker_id}]: Deleted original message from user {message.author.id}.")
+            self.log.info(f"[Video Worker {worker_id}]: Deleted original message from user {message.author.id}.")
 
         except Exception:
-            self.l.exception(f"[Video Worker {worker_id}]: Could not delete message!")
+            self.log.exception(f"[Video Worker {worker_id}]: Could not delete message!")
 
         await message.channel.send(repost_text, file=File(compressed))
-        self.l.info(f"[Video Worker {worker_id}]: Sent reposted video to channel {message.channel.id}.")
+        self.log.info(f"[Video Worker {worker_id}]: Sent reposted video to channel {message.channel.id}.")
 
         compressed.unlink(missing_ok=True)
-        self.l.info(f"[Video Worker {worker_id}]: Removed compressed video file {compressed}.")
+        self.log.info(f"[Video Worker {worker_id}]: Removed compressed video file {compressed}.")
 
     def _compress_to_limit(self: t.Self, input_file: pathlib.Path) -> pathlib.Path | None:
-        self.l.info(f'Starting compression for input file "{input_file}"...')
+        self.log.info(f'Starting compression for input file "{input_file}"...')
 
         duration = self._get_duration(input_file)
         max_bytes = Config.REPOSTS_MAX_SIZE_MB * 1024 * 1024
@@ -221,16 +218,16 @@ class VideoWorker:
         ]
         # fmt: on
 
-        self.l.info(f'Compressing input file "{input_file}" to "{output}" with bitrate {bitrate}k...')
+        self.log.info(f'Compressing input file "{input_file}" to "{output}" with bitrate {bitrate}k...')
         subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         if not output.exists():
-            self.l.error(f'Compression failed. The "{output}" file was not created.')
+            self.log.error(f'Compression failed. The "{output}" file was not created.')
             return None
 
         if output.stat().st_size > max_bytes + (1 * 1024 * 1024):
-            self.l.error(f'Compressed file "{output}" exceeds maximum size of {max_bytes} bytes.')
+            self.log.error(f'Compressed file "{output}" exceeds maximum size of {max_bytes} bytes.')
             return None
 
-        self.l.info(f'Compressed video saved to "{output}".')
+        self.log.info(f'Compressed video saved to "{output}".')
         return output

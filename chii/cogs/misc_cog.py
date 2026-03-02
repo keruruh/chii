@@ -1,27 +1,25 @@
-import logging
 import typing as t
 
 from discord import Activity, ActivityType, Interaction, app_commands
 from discord.ext import commands
 
 from chii.config import Config
-from chii.utils import DumpViewer, SimpleUtils
+from chii.utils import DumpViewer, LogSubclass, SimpleUtils
 
 
-class MiscCog(commands.Cog):
-    l = logging.getLogger(f"chii.cogs.{__qualname__}")
+class MiscCog(LogSubclass, commands.Cog):
     group = app_commands.Group(name="misc", description="Miscellaneous utility commands.")
 
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self: t.Self, bot: commands.Bot) -> None:
         self.bot = bot
 
-        self.l.info("MiscCog initialized.")
+        self.log.info("MiscCog initialized.")
 
     @group.command(name="dump", description="Dump a data file with scrolling pagination.")
     @app_commands.describe(filename="File inside the data path.", reverse="Read file from the bottom (useful for logs).")
     @commands.is_owner()
     async def dump_file(self: t.Self, interaction: Interaction, filename: str, reverse: bool = False) -> None:
-        self.l.info(f"{interaction.user} requested dump of {filename}")
+        self.log.info(f"{interaction.user} requested dump of {filename}")
 
         safe_path = (Config.DATA_PATH / filename).resolve()
 
@@ -43,7 +41,7 @@ class MiscCog(commands.Cog):
             text = "".join(lines)
 
         except Exception:
-            self.l.exception("Failed while reading dump file!")
+            self.log.exception("Failed while reading dump file!")
             await interaction.response.send_message("Failed to read file. See logs for more info.", ephemeral=True)
             return
 
