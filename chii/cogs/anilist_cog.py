@@ -229,7 +229,6 @@ class AniListCog(commands.Cog):
         query = f"query {{ {' '.join(activity_parts)} }}"
 
         self.l.debug("Querying AniList API for user activities...")
-
         batch = await self.query_graphql(query)
 
         return batch, alias_map
@@ -273,9 +272,8 @@ class AniListCog(commands.Cog):
     async def process_activity(self, channel: T_CHANNEL, discord_id: T_NUMERIC, user_data: T_DATA, activity: T_DATA) -> bool:
         activity_id = activity["id"]
         last_seen = user_data["last_activity_id"]
-        synced = user_data["synced"]
 
-        if not synced:
+        if not user_data["synced"]:
             self.l.info(f"Syncing user data for member {discord_id}.")
             user_data.update({"last_activity_id": activity_id, "synced": True})
 
@@ -311,7 +309,7 @@ class AniListCog(commands.Cog):
             return False
 
         cache = user_data.setdefault("progress_cache", {})
-        old_progress = cache[media_id]
+        old_progress = cache.get(media_id)
         cache[media_id] = new_progress
 
         if not old_progress:
@@ -352,13 +350,27 @@ class AniListCog(commands.Cog):
         self.l.debug(f'Updated "last_activity_at" to {timestamp}.')
 
     async def build_embed(self, discord_id: T_NUMERIC, user_data: T_DATA, activity: T_DATA) -> Embed:
+        title = activity["media"]["title"]["romaji"]
+        status = activity["status"].title()
+        progress = self.extract_progress(activity)
+        streak_suffix = "days" if user_data["streak"] != 1 else "day"
+
+        match status:
+            case "Completed":
+                color = Color.green()
+            case "Paused":
+                color = Color.orange()
+            case "Dropped":
+                color = Color.red()
+            case _:
+                color = Color.ash_theme()
+
         embed = Embed(
-            color=Color.ash_theme(),
-            title=activity["media"]["title"]["romaji"],
+            color=color,
+            title=title,
             description=(
-                f"{activity['status'].title()}: **{self.extract_progress(activity)}**\n"
-                f"Current Streak: **{user_data['streak']}** "
-                f"{'days' if user_data['streak'] != 1 else 'day'}\n\n"
+                f"{status}: **{progress}**\n"
+                f"Current Streak: **{user_data['streak']}** {streak_suffix}\n\n"
                 f"[**AniList**](https://anilist.co/anime/{activity['media']['id']}) | "
                 f"[**MyAnimeList**](https://myanimelist.net/anime/{activity['media']['idMal']})\n\n"
                 f"<t:{activity['createdAt']}:R>"
@@ -367,11 +379,11 @@ class AniListCog(commands.Cog):
 
         user = await self.bot.fetch_user(int(discord_id))
 
-        embed.set_author(
-            name=f"{activity['user']['name']} (@{user.name})" if user else activity["user"]["name"],
-            url=f"https://anilist.co/user/{activity['user']['id']}",
-            icon_url=activity["user"]["avatar"]["medium"],
-        )
+        author_name = f"{activity['user']['name']} (@{user.name})" if user else activity["user"]["name"]
+        author_url = f"https://anilist.co/user/{activity['user']['id']}"
+        author_icon = activity["user"]["avatar"]["medium"]
+
+        embed.set_author(name=author_name, url=author_url, icon_url=author_icon)
 
         return embed
 
