@@ -48,15 +48,15 @@ class RepostCog(commands.Cog):
         if message.author.bot:
             return
 
+        match = self.url_regex.search(message.content)
+
+        if not match:
+            return
+
         data = self._load_data()
         channel_ids = data.get("channel_ids", [])
 
         if message.channel.id not in channel_ids:
-            return
-
-        match = self.url_regex.search(message.content)
-
-        if not match:
             return
 
         self.l.info(f"Detected repost URL in channel {message.channel.id} by user {message.author.id}.")

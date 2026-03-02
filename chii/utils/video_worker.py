@@ -142,7 +142,7 @@ class VideoWorker:
         while True:
             job = await self.queue.get()
 
-            self.l.debug(f"[Video Worker {worker_id}]: Picked up job for URL {job['url']} from queue.")
+            self.l.debug(f'[Video Worker {worker_id}]: Picked up job for URL {job["url"]} from queue.')
 
             try:
                 await self._process_job(job, worker_id)
@@ -150,7 +150,7 @@ class VideoWorker:
                 self.l.exception(f"[Video Worker {worker_id}]: Unexpected exception while processinrg job!")
             finally:
                 self.active_urls.discard(job["url"])
-                self.l.debug(f"[Video Worker {worker_id}]: Job for URL {job['url']} completed and removed from queue.")
+                self.l.debug(f'[Video Worker {worker_id}]: Job for URL {job["url"]} completed and removed from queue.')
                 self.queue.task_done()
 
     async def _process_job(self: t.Self, job: _VideoJob, worker_id: T_NUMERIC) -> None:
