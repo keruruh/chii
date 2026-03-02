@@ -174,7 +174,7 @@ class ReminderCog(commands.Cog):
         self._load_data()
 
         for reminder in self.reminders.values():
-            self.l.debug(f"Scheduling reminder {reminder['id']} from disk...")
+            self.l.debug(f'Scheduling reminder {reminder["id"]} from disk...')
             await self._schedule_reminder(reminder)
 
         self.l.info("Reminder scheduler ready.")
@@ -208,7 +208,7 @@ class ReminderCog(commands.Cog):
         channel = self.bot.get_channel(reminder["channel_id"])
 
         if not channel:
-            self.l.debug(f"Channel {reminder['channel_id']} was not found in cache. Attempting to fetch...")
+            self.l.debug(f'Channel {reminder["channel_id"]} was not found in cache. Attempting to fetch...')
 
             try:
                 channel = await self.bot.fetch_channel(reminder["channel_id"])
@@ -217,7 +217,11 @@ class ReminderCog(commands.Cog):
                 return
 
         try:
-            message = f'<@{reminder["user_id"]}>\n-# Message: "**{reminder["message"] or "None"}**"\n-# Reminder ID: **{reminder["id"]}**'
+            message = (
+                f'<@{reminder["user_id"]}>\n'
+                '-# Message: **{reminder["message"] or "None"}**\n'
+                '-# Reminder ID: **{reminder["id"]}**'
+            )
 
             if not SimpleUtils.is_messageable(channel):
                 self.l.warning(f"Channel {channel.id} is not messageable!")
