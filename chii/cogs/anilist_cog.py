@@ -12,7 +12,7 @@ from chii.config import Config
 from chii.utils import T_CHANNEL, T_DATA, T_NUMERIC, SimpleUtils
 
 
-class Activity(enum.Enum):
+class _Status(enum.Enum):
     COMPLETED = "Completed"
     PAUSED = "Paused"
     DROPPED = "Dropped"
@@ -318,7 +318,7 @@ class AniListCog(commands.Cog):
         if not new_progress:
             status = self.extract_status(activity)
 
-            if status and status in {Activity.COMPLETED, Activity.DROPPED, Activity.PAUSED}:
+            if status and status in {_Status.COMPLETED, _Status.DROPPED, _Status.PAUSED}:
                 self.l.info("Activity has no numeric progress but it is supported.")
                 return True
 
@@ -372,20 +372,20 @@ class AniListCog(commands.Cog):
         progress = None
 
         status_color_map = {
-            Activity.COMPLETED: Color.green(),
-            Activity.DROPPED: Color.orange(),
-            Activity.PAUSED: Color.red(),
+            _Status.COMPLETED: Color.green(),
+            _Status.DROPPED: Color.orange(),
+            _Status.PAUSED: Color.red(),
         }
 
         if status in status_color_map:
-            title = f"{status.value} {title}"
+            title = f"{_Status.value} {title}"
             color = status_color_map[status]
         else:
             progress = self.extract_progress(activity)
             color = Color.ash_theme()
 
         parts = [
-            f'{(status.value if status else "Unknown")}: **{progress}**\n' if progress else None,
+            f'{(_Status.value if status else "Unknown")}: **{progress}**\n' if progress else None,
             f'Current Streak: **{user_data["streak"]}** {"day" if user_data["streak"] == 1 else 'days'}\n\n',
             f'[**AniList**](https://anilist.co/anime/{activity["media"]["id"]}) | ',
             f'[**MyAnimeList**](https://myanimelist.net/anime/{activity["media"]["idMal"]})\n\n',
@@ -429,11 +429,11 @@ class AniListCog(commands.Cog):
         self.l.debug(f'Activity "{status}" is a valid consumption activity.')
         return True
 
-    def extract_status(self, activity: T_DATA) -> Activity | None:
+    def extract_status(self, activity: T_DATA) -> _Status | None:
         status = activity.get("status", "")
 
         try:
-            return Activity(status)
+            return _Status(status)
         except ValueError:
             self.l.warning(f'Unsupported status "{status}" found!')
             return None
