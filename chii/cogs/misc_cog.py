@@ -18,7 +18,7 @@ class MiscCog(LogSubclass, commands.Cog):
     @group.command(name="dump", description="Dump a data file with scrolling pagination.")
     @app_commands.describe(filename="File inside the data path.", reverse="Read file from the bottom (useful for logs).")
     @commands.is_owner()
-    async def dump_file(self: t.Self, interaction: Interaction, filename: str, reverse: bool = False) -> None:
+    async def misc_dump(self: t.Self, interaction: Interaction, filename: str, reverse: bool = False) -> None:
         self.log.info(f"{interaction.user} requested dump of {filename}")
 
         safe_path = (Config.DATA_PATH / filename).resolve()
@@ -55,10 +55,13 @@ class MiscCog(LogSubclass, commands.Cog):
 
         await interaction.response.send_message(content=view.get_content(), view=view)
 
-    @group.command(name="status", description="Change the bot status")
-    @app_commands.describe(activity_type="Type of activity (playing, watching, listening, streaming).", text="Status.")
-    @commands.is_owner()
-    async def change_status(self: t.Self, interaction: Interaction, activity_type: str, text: str) -> None:
+    @group.command(name="activity", description="Change the bot's activity")
+    @app_commands.describe(activity_type="Type of activity (playing, watching, listening, streaming).", text="The activity status.")
+    async def misc_activity(self: t.Self, interaction: Interaction, activity_type: str, text: str) -> None:
+        if interaction.user.id not in {Config.BOT_OWNER, *Config.BOT_MANAGERS}:
+            await interaction.response.send_message("You don't have permissions to use this command", ephemeral=True)
+            return
+
         activity_type = activity_type.lower()
 
         match activity_type:

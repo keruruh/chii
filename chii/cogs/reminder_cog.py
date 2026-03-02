@@ -54,7 +54,7 @@ class ReminderCog(LogSubclass, commands.Cog):
         self.log.info("All reminder tasks have been cancelled.")
 
     @group.command(name="set", description="Create a new reminder that will notify you after a specified time.")
-    @app_commands.describe(time_input="The time after which the reminder should trigger (e.g.: 10s, 5m, 1h, 3d).", message="Optional custom message.")
+    @app_commands.describe(time_input="The time after which the reminder should trigger (e.g.: 10s, 5m, 1h, 3d).", message="Custom message. (Optional)")
     async def reminder_set(self: t.Self, interaction: Interaction, time_input: str, message: str | None) -> None:
         self.log.info(f"Received reminder set command from user {interaction.user.id}.")
 

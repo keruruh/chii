@@ -1,3 +1,4 @@
+import json
 import os
 import pathlib
 
@@ -21,6 +22,7 @@ class Config:
     BOT_PREFIX = "!!"
     BOT_TOKEN = str(os.getenv("BOT_TOKEN", "0"))
     BOT_OWNER = int(os.getenv("BOT_OWNER", "0"))
+    BOT_MANAGERS = json.loads(os.getenv("BOT_MANAGERS", "[]"))
 
     ANILIST_NORMAL_UPDATES_TIME_SEC = float(10 * 60)
     ANILIST_DEBUG_UPDATES_TIME_SEC = float(10)
