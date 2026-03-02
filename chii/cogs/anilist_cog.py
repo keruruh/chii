@@ -378,7 +378,7 @@ class AniListCog(commands.Cog):
         }
 
         if status in status_color_map:
-            title = f"{_Status.value} {title}"
+            title = f"{status.value} {title}"
             color = status_color_map[status]
         else:
             progress = self.extract_progress(activity)
@@ -430,7 +430,7 @@ class AniListCog(commands.Cog):
         return True
 
     def extract_status(self, activity: T_DATA) -> _Status | None:
-        status = activity.get("status", "")
+        status = activity.get("status", "").capitalize()
 
         try:
             return _Status(status)
