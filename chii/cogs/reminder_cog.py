@@ -37,7 +37,7 @@ class ReminderCog(LogSubclass, commands.Cog):
                 data = json.load(f)
 
             for r in data:
-                self.reminders[r["id"]] = r
+                self.reminders[r["uuid"]] = r
 
             self.log.info(f"Loaded {len(self.reminders)} reminders from disk.")
 
@@ -122,7 +122,7 @@ class ReminderCog(LogSubclass, commands.Cog):
             await interaction.response.send_message(content="You have no reminders.", ephemeral=True)
             return
 
-        lines = [f'- **{r["id"]}** <t:{int(r["trigger"])}:R> "{r["message"]}"' for r in user_reminders]
+        lines = [f'- **{r["uuid"]}** <t:{int(r["trigger"])}:R> "{r["message"]}"' for r in user_reminders]
         footer = f"\n\n-# **Total**: {len(user_reminders)}/{Config.REMINDERS_MAX_COUNT}"
 
         self.log.debug(f"Listing {len(user_reminders)} reminders for user {interaction.user.id}.")
@@ -187,7 +187,7 @@ class ReminderCog(LogSubclass, commands.Cog):
         self._load_data()
 
         for reminder in self.reminders.values():
-            self.log.debug(f"Scheduling reminder {reminder['id']} from disk...")
+            self.log.debug(f"Scheduling reminder {reminder['uuid']} from disk...")
             await self._schedule_reminder(reminder)
 
         self.log.info("Reminder scheduler ready.")
